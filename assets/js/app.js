@@ -275,4 +275,33 @@ document.addEventListener('DOMContentLoaded', function() {
         // Side-stream continuous bursts
         setTimeout(frame, 600);
     }
+
+    // --- Help Modal Logic ---
+    const helpModal = document.getElementById('helpModal');
+    const helpModalContent = document.getElementById('helpModalContent');
+    const openHelpBtn = document.getElementById('openHelpBtn');
+    const closeHelpBtn = document.getElementById('closeHelpBtn');
+    const helpModalBackdrop = document.getElementById('helpModalBackdrop');
+
+    if (openHelpBtn && helpModal) {
+        openHelpBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            helpModal.classList.add('modal-active');
+            setTimeout(() => {
+                helpModalContent.classList.add('modal-content-active');
+            }, 10);
+        });
+
+        const closeModal = () => {
+            helpModalContent.classList.remove('modal-content-active');
+            setTimeout(() => {
+                helpModal.classList.remove('modal-active');
+            }, 300);
+        };
+
+        if (closeHelpBtn) closeHelpBtn.addEventListener('click', closeModal);
+        if (helpModalBackdrop) helpModalBackdrop.addEventListener('click', closeModal);
+        const closeHelpIconBtn = document.getElementById('closeHelpIconBtn');
+        if (closeHelpIconBtn) closeHelpIconBtn.addEventListener('click', closeModal);
+    }
 });
