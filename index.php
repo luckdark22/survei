@@ -27,6 +27,12 @@ if (!isset($active_event) || !$active_event) {
 $active_event_id = $active_event ? $active_event['id'] : null;
 $active_event_name = $active_event ? $active_event['name'] : 'Survei Umum';
 $active_event_expiry = $active_event ? $active_event['expires_at'] : null;
+$is_share_link = isset($_GET['event_id']);
+$already_submitted = false;
+
+if ($active_event_id && $is_share_link && isset($_COOKIE["survey_submitted_" . $active_event_id])) {
+    $already_submitted = true;
+}
 
 $is_expired = false;
 if ($active_event_expiry && strtotime($active_event_expiry) < time()) {
@@ -116,6 +122,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 
                 // Mark as finished for the view
                 $_SESSION['is_finished'] = true;
+                
+                // Set cookie if share link
+                if ($is_share_link) {
+                    setcookie("survey_submitted_" . $active_event_id, "1", time() + (86400 * 365), "/");
+                }
             }
         } elseif ($_POST['action'] === 'prev') {
             // Go back
@@ -161,6 +172,18 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
         .animate-bounce-x {
             animation: bounce-x 1s infinite;
         }
+        /* Custom PC/Touchscreen Square Grid */
+        @media (min-width: 768px) {
+            .option-card-square {
+                aspect-ratio: 1 / 1 !important;
+                justify-content: center !important;
+                border-radius: 32px !important;
+            }
+            .kiosk-icon-size {
+                width: 200px !important;
+                height: 200px !important;
+            }
+        }
     </style>
 </head>
 <body class="bg-gradient-to-br from-amber-50 to-amber-100 text-slate-800 font-sans min-h-screen flex flex-col leading-relaxed">
@@ -189,55 +212,70 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
     </div>
 
     <!-- Main Content -->
-    <main class="flex-1 flex justify-center items-center py-12 px-8">
+    <main class="flex-1 flex justify-center items-center py-6 md:py-12 px-4 md:px-8">
         <div class="w-full max-w-5xl">
             <?php if ($is_expired): ?>
                 <!-- Event Expired Screen -->
                 <div class="bg-transparent text-center max-w-2xl mx-auto py-8 animate-[fadeInScale_0.6s_ease-out]">
-                    <div class="w-[120px] h-[120px] bg-slate-100/50 rounded-full flex items-center justify-center mx-auto mb-12 text-slate-400 text-6xl shadow-sm">
+                    <div class="w-20 h-20 md:w-[120px] md:h-[120px] bg-slate-100/50 rounded-full flex items-center justify-center mx-auto mb-8 md:mb-12 text-slate-400 text-4xl md:text-6xl shadow-sm">
                         <i class="fa-solid fa-hourglass-end"></i>
                     </div>
-                    <h1 class="text-[3.2rem] font-bold text-slate-900 mb-5 leading-tight tracking-tight">Acara Selesai</h1>
-                    <p class="text-slate-600 text-xl mb-14 font-medium px-4">
+                    <h1 class="text-3xl md:text-[3.2rem] font-bold text-slate-900 mb-4 md:mb-5 leading-tight tracking-tight">Acara Selesai</h1>
+                    <p class="text-base md:text-xl text-slate-600 mb-10 md:mb-14 font-medium px-4">
                         Maaf, periode pengisian survei untuk event <span class="text-amber-700 font-bold"><?php echo htmlspecialchars($active_event_name); ?></span> telah berakhir pada <?php echo date('d M Y, H:i', strtotime($active_event_expiry)); ?>.
                         <br><br>
                         Terima kasih atas partisipasi dan antusiasme Anda.
                     </p>
                     <div class="flex justify-center">
-                        <div class="px-8 py-3 bg-white/40 border border-white/60 rounded-full text-slate-500 font-bold text-sm tracking-widest uppercase">
+                        <div class="px-6 py-2 md:px-8 md:py-3 bg-white/40 border border-white/60 rounded-full text-slate-500 font-bold text-xs md:text-sm tracking-widest uppercase text-center">
                             DIREKTORAT INOVASI & LAYANAN
                         </div>
                     </div>
                 </div>
+            <?php elseif ($already_submitted): ?>
+                <!-- Already Submitted Screen -->
+                <div class="bg-transparent text-center max-w-2xl mx-auto py-8 animate-[fadeInScale_0.6s_ease-out]">
+                    <div class="w-20 h-20 md:w-[120px] md:h-[120px] bg-amber-50 rounded-full flex items-center justify-center mx-auto mb-8 md:mb-12 text-amber-500 text-4xl md:text-6xl shadow-sm">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                    </div>
+                    <h1 class="text-3xl md:text-[3.2rem] font-bold text-slate-900 mb-4 md:mb-5 leading-tight tracking-tight">Sudah Mengisi</h1>
+                    <p class="text-base md:text-xl text-slate-600 mb-10 md:mb-14 font-medium px-4">
+                        Anda telah berpartisipasi dan mengisi survei ini sebelumnya. Terima kasih atas masukan yang telah diberikan.
+                    </p>
+                </div>
             <?php elseif ($is_finished): ?>
                 <!-- Success Screen -->
                 <div class="bg-transparent text-center max-w-2xl mx-auto py-8 animate-[fadeInScale_0.6s_ease-out]">
-                    <div class="w-[120px] h-[120px] bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-12 animate-[pulse_1s_infinite] text-emerald-500 text-6xl shadow-sm">
+                    <div class="w-20 h-20 md:w-[120px] md:h-[120px] bg-emerald-50 rounded-full flex items-center justify-center mx-auto mb-8 md:mb-12 animate-[pulse_1s_infinite] text-emerald-500 text-4xl md:text-6xl shadow-sm">
                         <i class="fa-solid fa-heart-circle-check"></i>
                     </div>
-                    <h1 class="text-[3.2rem] font-bold text-slate-900 mb-5 leading-tight tracking-tight">Sangat Berkesan!</h1>
-                    <p class="text-slate-600 text-xl mb-14 font-medium px-4">
+                    <h1 class="text-3xl md:text-[3.2rem] font-bold text-slate-900 mb-4 md:mb-5 leading-tight tracking-tight">Sangat Berkesan!</h1>
+                    <p class="text-base md:text-xl text-slate-600 mb-10 md:mb-14 font-medium px-4">
                         Terima kasih telah berbagi pengalaman Anda. Masukan Anda akan langsung kami gunakan untuk menyempurnakan kualitas layanan kami.
                     </p>
-                    <form method="POST">
-                        <input type="hidden" name="action" value="restart">
-                        <button type="submit" class="bg-amber-500 text-white font-bold py-4 px-12 rounded-full shadow-[0_10px_20px_rgba(245,158,11,0.3)] hover:shadow-[0_15px_30px_rgba(245,158,11,0.5)] hover:translate-x-2 transition-all duration-300 flex items-center gap-3 mx-auto">
-                            KIRIM RESPONS BARU
-                            <i class="fa-solid fa-rotate-right"></i>
-                        </button>
-                    </form>
+                    
+                    <?php if (!$is_share_link): ?>
+                        <!-- Kiosk Mode: Allow Next User -->
+                        <form method="POST">
+                            <input type="hidden" name="action" value="restart">
+                            <button type="submit" class="bg-amber-500 text-white font-bold py-3 md:py-4 px-8 md:px-12 rounded-full shadow-[0_10px_20px_rgba(245,158,11,0.3)] hover:shadow-[0_15px_30px_rgba(245,158,11,0.5)] hover:translate-x-2 transition-all duration-300 flex items-center justify-center gap-2 md:gap-3 mx-auto text-sm md:text-base w-full md:w-auto">
+                                KIRIM RESPONS BARU
+                                <i class="fa-solid fa-rotate-right"></i>
+                            </button>
+                        </form>
+                    <?php endif; ?>
                 </div>
             <?php else: ?>
                 <!-- Survey Component -->
                 <form id="surveyForm" method="POST">
                     <input type="hidden" name="question_id" value="<?php echo $current_question['id']; ?>">
                     
-                    <div id="surveyContainer" class="bg-transparent py-8 animate-[fadeInScale_0.6s_ease-out]">
-                        <span class="text-amber-700 uppercase font-bold text-sm tracking-widest mb-4 block opacity-80"><?php echo $current_question['section']; ?></span>
-                        <h1 class="text-4xl md:text-[3.25rem] font-bold text-slate-900 mb-8 leading-tight tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)]"><?php echo $current_question['question']; ?></h1>
+                    <div id="surveyContainer" class="bg-transparent py-4 md:py-8 animate-[fadeInScale_0.6s_ease-out]">
+                        <span class="text-amber-700 uppercase font-bold text-xs md:text-sm tracking-widest mb-2 md:mb-4 block opacity-80"><?php echo $current_question['section']; ?></span>
+                        <h1 class="text-2xl md:text-[3.25rem] font-bold text-slate-900 mb-6 md:mb-8 leading-tight tracking-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.15)]"><?php echo $current_question['question']; ?></h1>
                         
-                        <div class="flex items-center gap-4 mb-10 w-full max-w-2xl">
-                            <span class="text-sm font-bold text-amber-700 uppercase tracking-widest shrink-0">Tahap <?php echo $current_index + 1; ?> / <?php echo $total_questions; ?></span>
+                        <div class="flex items-center gap-3 md:gap-4 mb-8 md:mb-10 w-full max-w-2xl">
+                            <span class="text-xs md:text-sm font-bold text-amber-700 uppercase tracking-widest shrink-0">Tahap <?php echo $current_index + 1; ?> / <?php echo $total_questions; ?></span>
                             <div class="flex-1 bg-amber-200/50 rounded-full h-2 overflow-hidden shadow-inner">
                                 <div class="bg-gradient-to-r from-amber-400 to-amber-600 h-2 rounded-full transition-all duration-1000 ease-out" style="width: <?php echo (($current_index + 1) / $total_questions) * 100; ?>%"></div>
                             </div>
@@ -245,23 +283,23 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
 
                         <?php if ($current_question['type'] === 'rating'): ?>
                             <!-- Rating Options Grid -->
-                            <div class="survey-options-grid grid grid-cols-2 md:grid-cols-4 gap-8 mb-4 <?php echo isset($_SESSION['responses'][$current_question['id']]) ? 'has-selection' : ''; ?>">
+                            <div class="survey-options-grid grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-8 mb-4 <?php echo isset($_SESSION['responses'][$current_question['id']]) ? 'has-selection' : ''; ?>">
                                 <?php foreach ($current_question['options'] as $option): ?>
                                     <?php 
                                         $selected = (isset($_SESSION['responses'][$current_question['id']]) && $_SESSION['responses'][$current_question['id']] == $option['value']) ? 'selected' : '';
                                     ?>
-                                    <label class="option-card <?php echo $selected; ?> group bg-white/55 backdrop-blur-2xl border-2 border-white/80 rounded-3xl p-6 text-center cursor-pointer transition-all duration-300 flex flex-col items-center gap-6 hover:bg-white/70 shadow-[0_8px_32px_rgba(0,0,0,0.08),inset_0_2px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(255,255,255,0.4)] hover:shadow-[0_12px_40px_rgba(251,191,36,0.2),inset_0_2px_0_rgba(255,255,255,1)]">
+                                    <label class="option-card option-card-square <?php echo $selected; ?> group bg-white/55 backdrop-blur-2xl border-2 border-white/80 rounded-[1rem] md:rounded-3xl p-2 md:p-6 text-center cursor-pointer transition-all duration-300 flex flex-col justify-center items-center gap-2 md:gap-4 hover:bg-white/70 shadow-[0_4px_16px_rgba(0,0,0,0.08),inset_0_2px_0_rgba(255,255,255,0.9),inset_0_-1px_0_rgba(255,255,255,0.4)] hover:shadow-[0_8px_20px_rgba(251,191,36,0.2),inset_0_2px_0_rgba(255,255,255,1)]">
                                         <input type="radio" name="response" value="<?php echo $option['value']; ?>" class="hidden" required <?php echo $selected ? 'checked' : ''; ?>>
                                         <!-- Image Wrapper for Perfect Circle Cropping -->
-                                        <div class="w-[140px] h-[140px] rounded-full overflow-hidden shadow-[0_10px_20px_rgba(0,0,0,0.1)] group-hover:shadow-[0_15px_30px_rgba(251,191,36,0.3)] transition-all duration-300 group-hover:-translate-y-2 group-[.selected]:ring-8 group-[.selected]:ring-amber-400/70 group-[.selected]:shadow-[0_20px_40px_rgba(251,191,36,0.4)] flex justify-center items-center bg-transparent mt-2">
+                                        <div class="w-16 h-16 kiosk-icon-size rounded-full overflow-hidden shadow-[0_5px_10px_rgba(0,0,0,0.1)] group-hover:shadow-[0_8px_15px_rgba(251,191,36,0.3)] transition-all duration-300 md:group-hover:-translate-y-2 group-[.selected]:ring-4 md:group-[.selected]:ring-8 group-[.selected]:ring-amber-400/70 group-[.selected]:shadow-[0_10px_20px_rgba(251,191,36,0.4)] flex justify-center items-center bg-transparent mt-1 md:mt-2">
                                             <img src="<?php echo $option['image']; ?>" class="w-full h-full object-cover scale-[1.7] group-hover:scale-[1.75] group-[.selected]:scale-[1.8] transition-transform duration-500 ease-out" alt="<?php echo $option['label']; ?>">
                                         </div>
-                                        <span class="text-sm font-extrabold text-slate-600 uppercase group-[.selected]:text-amber-700 transition-colors duration-300"><?php echo $option['label']; ?></span>
+                                        <span class="text-[10px] md:text-sm font-extrabold text-slate-600 uppercase group-[.selected]:text-amber-700 transition-colors duration-300"><?php echo $option['label']; ?></span>
                                     </label>
                                 <?php endforeach; ?>
                             </div>
                         <?php elseif ($current_question['type'] === 'text'): ?>
-                            <textarea name="response" class="feedback-textarea w-full min-h-[200px] p-8 rounded-2xl border-4 border-white/40 font-inherit text-xl resize-none transition-all duration-300 bg-white/50 backdrop-blur-sm focus:outline-none focus:bg-white focus:border-amber-400 focus:ring-4 focus:ring-amber-400/20" placeholder="<?php echo $current_question['placeholder']; ?>" required><?php echo isset($_SESSION['responses'][$current_question['id']]) ? $_SESSION['responses'][$current_question['id']] : ''; ?></textarea>
+                            <textarea name="response" class="feedback-textarea w-full min-h-[120px] md:min-h-[200px] p-4 md:p-8 rounded-xl md:rounded-2xl border-2 md:border-4 border-white/40 font-inherit text-base md:text-xl resize-none transition-all duration-300 bg-white/50 backdrop-blur-sm focus:outline-none focus:bg-white focus:border-amber-400 focus:ring-2 md:focus:ring-4 focus:ring-amber-400/20" placeholder="<?php echo $current_question['placeholder']; ?>" required><?php echo isset($_SESSION['responses'][$current_question['id']]) ? $_SESSION['responses'][$current_question['id']] : ''; ?></textarea>
                             <!-- Virtual Keyboard Toggle -->
                             <div class="flex justify-end mt-3">
                                 <button type="button" id="toggleKeyboardBtn" class="flex items-center gap-2 px-5 py-2.5 bg-white/60 backdrop-blur-lg border-2 border-white/70 rounded-full text-sm font-bold text-slate-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-300 transition-all duration-300 shadow-sm">
@@ -273,23 +311,22 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
                     </div>
 
                     <!-- Navigation Bar -->
-                    <div class="flex justify-between items-center mt-12">
+                    <div class="flex flex-row flex-wrap sm:flex-nowrap justify-between items-center mt-8 md:mt-12 gap-4">
                         <?php if ($current_index > 0): ?>
-                            <button type="submit" name="action" value="prev" class="flex items-center gap-3 py-4 px-10 rounded-full font-bold cursor-pointer transition-all duration-300 text-base bg-white/40 backdrop-blur-sm text-slate-700 border border-white/40 hover:bg-white">
+                            <button type="submit" name="action" value="prev" class="flex-1 sm:flex-none justify-center items-center gap-2 md:gap-3 py-3 md:py-4 px-6 md:px-10 rounded-full font-bold cursor-pointer transition-all duration-300 text-sm md:text-base bg-white/60 backdrop-blur-sm text-slate-700 border border-white/60 shadow-sm hover:bg-white">
                                 <i class="fa-solid fa-chevron-left"></i>
-                                Kembali
+                                KEMBALI
                             </button>
                         <?php else: ?>
-                            <div></div>
+                            <div class="hidden sm:block flex-1 sm:flex-none"></div>
                         <?php endif; ?>
                         
-                        <button type="submit" name="action" value="<?php echo ($current_index === $total_questions - 1) ? 'submit' : 'next'; ?>" class="btn-next flex items-center gap-3 py-4 px-16 rounded-full font-bold cursor-pointer transition-all duration-300 text-base bg-amber-500 text-white shadow-[0_10px_20px_rgba(245,158,11,0.3)] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:not-disabled:translate-x-2 hover:not-disabled:shadow-[0_15px_30px_rgba(245,158,11,0.5)]" <?php echo isset($_SESSION['responses'][$current_question['id']]) ? '' : 'disabled'; ?>>
+                        <button type="submit" name="action" value="<?php echo ($current_index === $total_questions - 1) ? 'submit' : 'next'; ?>" class="btn-next flex-1 sm:flex-none justify-center flex items-center gap-2 md:gap-3 py-3 md:py-4 px-8 md:px-16 rounded-full font-bold cursor-pointer transition-all duration-300 text-sm md:text-base bg-amber-500 text-white shadow-[0_10px_20px_rgba(245,158,11,0.3)] disabled:bg-slate-200 disabled:text-slate-400 disabled:cursor-not-allowed disabled:shadow-none hover:not-disabled:translate-x-2 hover:not-disabled:shadow-[0_15px_30px_rgba(245,158,11,0.5)]" <?php echo isset($_SESSION['responses'][$current_question['id']]) ? '' : 'disabled'; ?>>
                             <?php echo ($current_index === $total_questions - 1) ? 'KIRIM SURVEI' : 'LANJUTKAN'; ?>
                             <i class="fa-solid fa-chevron-right"></i>
-                            </button>
-                        </div>
+                        </button>
                         
-                        <div class="w-20"></div> <!-- Spacer for balance -->
+                        <div class="hidden md:block w-20"></div> <!-- Spacer for balance only on desktop -->
                     </div>
                 </form>
             <?php endif; ?>

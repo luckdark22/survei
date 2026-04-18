@@ -53,45 +53,29 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
     </nav>
 
     <!-- Toast Notification Container -->
-    <div id="toastContainer" class="fixed top-8 right-8 z-[110] flex flex-col gap-3 items-end pointer-events-none" style="left: auto !important; right: 2rem !important;"></div>
+    <div id="toastContainer" style="position:fixed; top:2rem; right:2rem; z-index:120; display:flex; flex-direction:column; gap:0.75rem; align-items:flex-end; pointer-events:none;"></div>
 
     <script>
         function showToast(message, type = 'success') {
             const container = document.getElementById('toastContainer');
             const toast = document.createElement('div');
             
-            const config = {
-                success: {
-                    bg: 'bg-slate-900',
-                    border: 'border-emerald-500/50',
-                    icon: 'fa-circle-check',
-                    iconColor: 'text-emerald-400',
-                    shadow: 'shadow-2xl shadow-emerald-500/20'
-                },
-                error: {
-                    bg: 'bg-slate-900',
-                    border: 'border-rose-500/50',
-                    icon: 'fa-triangle-exclamation',
-                    iconColor: 'text-rose-400',
-                    shadow: 'shadow-2xl shadow-rose-500/20'
-                }
+            const colors = {
+                success: { border: '#10b981', icon: 'fa-circle-check', iconColor: '#34d399' },
+                error:   { border: '#f43f5e', icon: 'fa-triangle-exclamation', iconColor: '#fb7185' }
             };
             
-            const s = config[type] || config.success;
+            const s = colors[type] || colors.success;
             
-            toast.className = `${s.bg} ${s.border} ${s.shadow} px-6 py-4 rounded-full border flex items-center gap-4 toast-animate-in font-black text-xs min-w-[320px] pointer-events-auto`;
-            toast.innerHTML = `
-                <div class="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center text-sm shrink-0 ${s.iconColor}">
-                    <i class="fa-solid ${s.icon}"></i>
-                </div>
-                <div class="flex-1 text-center text-white font-black uppercase tracking-[0.1em] leading-none">${message}</div>
-            `;
+            toast.style.cssText = 'background:#0f172a; border:1px solid ' + s.border + '; padding:1rem 1.5rem; border-radius:9999px; display:flex; align-items:center; gap:1rem; min-width:320px; pointer-events:auto; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); font-size:12px;';
+            toast.className = 'toast-animate-in';
+            toast.innerHTML = '<div style="width:1.75rem; height:1.75rem; background:rgba(255,255,255,0.1); border-radius:9999px; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:' + s.iconColor + ';"><i class="fa-solid ' + s.icon + '"></i></div><div style="flex:1; text-align:center; color:white; font-weight:900; text-transform:uppercase; letter-spacing:0.1em; line-height:1;">' + message + '</div>';
             
             container.appendChild(toast);
             
-            setTimeout(() => {
+            setTimeout(function() {
                 toast.classList.add('toast-animate-out');
-                setTimeout(() => toast.remove(), 400);
+                setTimeout(function() { toast.remove(); }, 400);
             }, 3500);
         }
 

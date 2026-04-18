@@ -26,8 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['success'] = "Event berhasil diaktifkan!";
         } elseif ($_POST['action'] === 'delete') {
             $id = $_POST['id'];
-            // Don't allow deleting the only active event if possible, but for simplicity:
-            $stmt = $pdo->prepare("DELETE FROM events WHERE id = ?");
+            // Soft delete event
+            $stmt = $pdo->prepare("UPDATE events SET is_deleted = 1 WHERE id = ?");
             $stmt->execute([$id]);
             $_SESSION['success'] = "Event berhasil dihapus!";
         } elseif ($_POST['action'] === 'edit') {
@@ -52,12 +52,12 @@ $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $items_per_page;
 
-// Count total events
-$total_count = $pdo->query("SELECT COUNT(*) FROM events")->fetchColumn();
+// Count total events (excluding deleted)
+$total_count = $pdo->query("SELECT COUNT(*) FROM events WHERE is_deleted = 0")->fetchColumn();
 $total_pages = ceil($total_count / $items_per_page);
 
-// Fetch events with pagination
-$stmt = $pdo->prepare("SELECT * FROM events ORDER BY created_at DESC LIMIT ? OFFSET ?");
+// Fetch events with pagination (excluding deleted)
+$stmt = $pdo->prepare("SELECT * FROM events WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?");
 $stmt->bindValue(1, $items_per_page, PDO::PARAM_INT);
 $stmt->bindValue(2, $offset, PDO::PARAM_INT);
 $stmt->execute();
@@ -119,14 +119,22 @@ require_once 'includes/header.php';
                                             <span class="text-slate-300 italic">Tanpa Batas</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="px-4 py-4 text-right flex justify-end gap-2 items-center">
+                                    <td class="px-4 py-4 text-center">
+                                        <?php if($e['is_active']): ?>
+                                            <span class="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-black uppercase tracking-widest"><i class="fa-solid fa-check-circle mr-1"></i> AKTIF</span>
+                                        <?php else: ?>
+                                            <span class="px-3 py-1 bg-slate-100 text-slate-400 rounded-full text-[10px] font-black uppercase tracking-widest">NON-AKTIF</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="px-4 py-4 text-right">
+                                        <div class="flex justify-end gap-2 items-center">
                                         <button onclick="copyToClipboard('<?php echo $share_link; ?>')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider" title="Salin Link Survei">
                                             <i class="fa-regular fa-copy text-amber-500"></i> <span>LINK</span>
                                         </button>
                                         <a href="sessions?event_id=<?php echo $e['id']; ?>" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-black text-[11px] transition-all shadow-md flex items-center gap-1.5 uppercase tracking-wider" title="Lihat Rekap Data Responden">
                                             <i class="fa-solid fa-chart-line"></i> <span>REKAP</span>
                                         </a>
-                                        <button type="button" onclick='editEvent(<?php echo json_encode($e); ?>)' class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider" title="Edit Detail Event">
+                                        <button type="button" onclick="editEvent(<?php echo htmlspecialchars(json_encode($e), ENT_QUOTES, 'UTF-8'); ?>)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider" title="Edit Detail Event">
                                             <i class="fa-solid fa-pen-to-square"></i> <span>EDIT</span>
                                         </button>
                                         <?php if(!$e['is_active']): ?>
@@ -141,6 +149,7 @@ require_once 'includes/header.php';
                                         <button type="button" onclick="openDeleteModal('<?php echo $e['id']; ?>', '<?php echo addslashes($e['name']); ?>')" class="px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-500 rounded-lg font-bold text-[11px] transition-all shadow-sm flex items-center gap-1.5" title="Hapus Event">
                                             <i class="fa-solid fa-trash-can text-red-400"></i>
                                         </button>
+                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>
@@ -180,9 +189,9 @@ require_once 'includes/header.php';
     </main>
 
     <!-- Add/Edit Event Modal -->
-    <div id="eventModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg relative z-10 animate-[fadeInScale_0.2s_ease-out] overflow-hidden">
+    <div id="eventModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:110; justify-content:center; align-items:center; padding:1rem;">
+        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(4px);" onclick="closeModal()"></div>
+        <div style="position:relative; z-index:10; width:100%; max-width:32rem; background:white; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); overflow:hidden;">
             <div id="formHeader" class="px-6 py-5 border-b border-slate-100 bg-amber-50 flex justify-between items-center transition-colors">
                 <h2 id="formTitle" class="text-lg font-bold text-amber-800 flex items-center gap-2 uppercase tracking-wider">
                     <i class="fa-solid fa-plus-circle"></i> Tambah Event
@@ -226,9 +235,9 @@ require_once 'includes/header.php';
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 animate-[fadeInScale_0.2s_ease-out]">
+    <div id="deleteModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:100; justify-content:center; align-items:center; padding:1rem;">
+        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(4px);" onclick="closeDeleteModal()"></div>
+        <div style="position:relative; z-index:10; width:100%; max-width:28rem; background:white; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="p-8 text-center">
                 <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
                     <i class="fa-solid fa-triangle-exclamation"></i>
@@ -238,14 +247,14 @@ require_once 'includes/header.php';
                     Apakah Anda yakin ingin menghapus <span id="deleteItemName" class="font-bold text-slate-700"></span>?<br>
                     Tindakan ini tidak dapat dibatalkan.
                 </p>
-                <div class="flex gap-3">
-                    <button type="button" onclick="closeDeleteModal()" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors">
+                <div style="display:flex; gap:0.75rem;">
+                    <button type="button" onclick="closeDeleteModal()" style="flex:1; padding:0.75rem 1rem; background:#f1f5f9; color:#475569; font-weight:700; border-radius:0.75rem; border:1px solid #e2e8f0; cursor:pointer; font-size:14px;">
                         Batal
                     </button>
-                    <form method="POST" id="deleteForm" class="flex-1">
+                    <form method="POST" id="deleteForm" style="flex:1;">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" id="deleteItemId">
-                        <button type="submit" class="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-red-500/30">
+                        <button type="submit" style="width:100%; padding:0.75rem 1rem; background:#ef4444; color:white; font-weight:700; border-radius:0.75rem; border:none; cursor:pointer; font-size:14px; box-shadow:0 4px 14px rgba(239,68,68,0.3);">
                             Ya, Hapus
                         </button>
                     </form>
@@ -268,18 +277,29 @@ require_once 'includes/header.php';
             });
         }
 
+        function openAddModal() {
+            resetForm();
+            document.getElementById('eventModal').style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('eventModal').style.display = 'none';
+        }
+
         function editEvent(data) {
-            // Scroll to form
-            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
-            
             // Switch form mode
             document.getElementById('formAction').value = 'edit';
             document.getElementById('event_id').value = data.id;
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Event';
             document.getElementById('submitBtn').innerText = 'Simpan Perubahan';
-            document.getElementById('cancelBtn').classList.remove('hidden');
-            document.getElementById('formHeader').classList.replace('bg-amber-50', 'bg-blue-50');
-            document.getElementById('formTitle').classList.replace('text-amber-800', 'text-blue-800');
+            
+            const header = document.getElementById('formHeader');
+            header.classList.remove('bg-amber-50');
+            header.classList.add('bg-blue-50');
+            
+            const title = document.getElementById('formTitle');
+            title.classList.remove('text-amber-800');
+            title.classList.add('text-blue-800');
 
             // Populate fields
             document.getElementById('field_name').value = data.name;
@@ -293,6 +313,9 @@ require_once 'includes/header.php';
             } else {
                 document.getElementById('field_expires_at').value = '';
             }
+
+            // Show Modal
+            document.getElementById('eventModal').style.display = 'flex';
         }
 
         function resetForm() {
@@ -301,19 +324,24 @@ require_once 'includes/header.php';
             document.getElementById('event_id').value = '';
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-calendar-plus"></i> Tambah Event';
             document.getElementById('submitBtn').innerText = 'Simpan Event';
-            document.getElementById('cancelBtn').classList.add('hidden');
-            document.getElementById('formHeader').classList.replace('bg-blue-50', 'bg-amber-50');
-            document.getElementById('formTitle').classList.replace('text-blue-800', 'text-amber-800');
+            
+            const header = document.getElementById('formHeader');
+            header.classList.remove('bg-blue-50');
+            header.classList.add('bg-amber-50');
+            
+            const title = document.getElementById('formTitle');
+            title.classList.remove('text-blue-800');
+            title.classList.add('text-amber-800');
         }
 
         function openDeleteModal(id, name) {
             document.getElementById('deleteItemId').value = id;
             document.getElementById('deleteItemName').innerText = name;
-            document.getElementById('deleteModal').classList.remove('hidden');
+            document.getElementById('deleteModal').style.display = 'flex';
         }
 
         function closeDeleteModal() {
-            document.getElementById('deleteModal').classList.add('hidden');
+            document.getElementById('deleteModal').style.display = 'none';
         }
     </script>
 <?php require_once 'includes/footer.php'; ?>

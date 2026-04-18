@@ -133,6 +133,29 @@ foreach($chart_raw as $cr) {
 }
 
 $query_string = http_build_query($_GET);
+
+// Setup PDF Report Headers
+$active_event_name = "Semua Event (Global)";
+if ($filter_event_id && !empty($events_list)) {
+    foreach($events_list as $ev) {
+        if ($ev['id'] == $filter_event_id) {
+            $active_event_name = $ev['name'];
+            break;
+        }
+    }
+}
+$periode_text = "Semua Waktu";
+if ($start_date && $end_date) {
+    if ($start_date === $end_date) {
+        $periode_text = date('d M Y', strtotime($start_date));
+    } else {
+        $periode_text = date('d M Y', strtotime($start_date)) . " s/d " . date('d M Y', strtotime($end_date));
+    }
+} elseif ($start_date) {
+    $periode_text = "Sejak " . date('d M Y', strtotime($start_date));
+} elseif ($end_date) {
+    $periode_text = "Hingga " . date('d M Y', strtotime($end_date));
+}
 ?>
 <?php
 $page_title = "Data Responden";
@@ -142,8 +165,23 @@ require_once 'includes/header.php';
 
     <main class="max-w-[95%] mx-auto px-4 py-10">
 
+        <!-- Print PDF Header (Hidden on Screen) -->
+        <div class="hidden print-only mb-6 border-b-2 border-slate-800 pb-4">
+            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
+                <div>
+                    <h1 style="font-size: 20pt; font-weight: 900; color: #0f172a; margin: 0; line-height: 1.2;">Laporan Hasil Kepuasan</h1>
+                    <h2 style="font-size: 14pt; font-weight: 900; color: #d97706; margin: 0; text-transform: uppercase; margin-top: 4px;"><?php echo htmlspecialchars($active_event_name); ?></h2>
+                </div>
+                <div style="text-align: right; font-size: 9pt; color: #475569; line-height: 1.5;">
+                    <div><strong>Periode:</strong> <?php echo $periode_text; ?></div>
+                    <div><strong>Total Responden:</strong> <?php echo number_format($total_count); ?> orang</div>
+                    <div><strong>Waktu Cetak:</strong> <?php echo date('d M Y, H:i'); ?></div>
+                </div>
+            </div>
+        </div>
+
         <!-- Filters & Actions -->
-        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6 gap-4">
+        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6 gap-4 print-hidden">
             <form method="GET" class="flex items-end gap-3 w-full md:w-auto">
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mulai</label>
@@ -172,14 +210,18 @@ require_once 'includes/header.php';
                     <a href="sessions" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg transition-colors text-sm">RESET</a>
                 <?php endif; ?>
             </form>
-            
-            <a href="export?<?php echo $query_string; ?>" class="w-full md:w-auto text-center px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(16,185,129,0.3)] text-sm flex items-center justify-center gap-2">
-                <i class="fa-solid fa-download"></i> Unduh Tabel (.CSV)
-            </a>
+            <div class="flex items-center gap-2 w-full md:w-auto">
+                <a href="export?<?php echo $query_string; ?>" class="flex-1 text-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(16,185,129,0.3)] text-xs md:text-sm flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-file-csv text-base"></i> <span class="hidden md:inline">Ekspor CSV</span>
+                </a>
+                <button onclick="window.print()" style="background:#f43f5e; color:#ffffff;" class="flex-1 text-center px-4 py-2.5 font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(244,63,94,0.3)] text-xs md:text-sm flex items-center justify-center gap-2" title="Cetak / Simpan PDF">
+                    <i class="fa-solid fa-file-pdf text-base"></i> <span class="hidden md:inline">Ekspor PDF</span>
+                </button>
+            </div>
         </div>
 
         <!-- Summary Statistics / Chart Section -->
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+        <div class="print-chart-grid grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
             <!-- Stats Card 1: Total -->
             <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center">
                 <span class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Responden</span>
@@ -204,8 +246,8 @@ require_once 'includes/header.php';
         </div>
 
 
-        <!-- Data Table -->
-        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+        <!-- Data Table (Screen Only) -->
+        <div class="screen-only bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-8">
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse min-w-[1200px]">
                     <thead>
@@ -263,6 +305,72 @@ require_once 'includes/header.php';
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        <!-- Data List: Cards Flow (PDF Only) -->
+        <div class="pdf-only space-y-6">
+            <?php if (count($sessions) > 0): ?>
+                <?php foreach($sessions as $sid => $sess): ?>
+                    <!-- Session Card -->
+                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print-session-card">
+                        <!-- Session Header -->
+                        <div class="bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center p-5 gap-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-12 h-12 rounded-xl bg-amber-100 flex justify-center items-center text-amber-600 shadow-inner">
+                                    <i class="fa-solid fa-user-check text-xl"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Kode Sesi</div>
+                                    <div class="text-xl font-black text-slate-800">#<?php echo str_pad($sid, 5, '0', STR_PAD_LEFT); ?></div>
+                                </div>
+                            </div>
+                            <div class="flex flex-col md:items-end gap-2 text-left md:text-right">
+                                <div class="px-3 py-1 bg-amber-50 rounded-lg border border-amber-100 text-amber-600 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                                    <i class="fa-solid fa-tag"></i> <?php echo htmlspecialchars($sess['event']); ?>
+                                </div>
+                                <div class="text-xs font-bold text-slate-500">
+                                    <i class="fa-regular fa-clock"></i> <?php echo date('d M Y, H:i', strtotime($sess['time'])); ?>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Questions & Answers Wrapper -->
+                        <div class="p-6 bg-white">
+                            <div class="print-qa-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                                <?php foreach($unique_qs as $key => $title): ?>
+                                    <!-- Inner QA Card -->
+                                    <div class="bg-slate-50/50 rounded-xl p-4 border border-slate-100 flex flex-col justify-between hover:border-amber-200 hover:shadow-md transition-all group print-qa-card" style="page-break-inside: avoid;">
+                                        <div class="text-[11px] text-slate-600 font-bold mb-3 uppercase tracking-wide leading-relaxed group-hover:text-amber-700 transition-colors">
+                                            <span class="text-amber-500 font-black mr-1">Q.</span> <?php echo htmlspecialchars($title); ?>
+                                        </div>
+                                        <div class="text-sm border-t border-slate-100 pt-3 mt-auto font-black text-slate-900">
+                                            <?php 
+                                            $ans = isset($sess['answers'][$key]) ? $sess['answers'][$key] : '-';
+                                            if ($ans === 'SANGAT PUAS' || $ans === 'PUAS') {
+                                                echo '<span class="text-emerald-600 flex items-center gap-2"><i class="fa-solid fa-face-smile text-emerald-500 text-lg"></i> ' . $ans . '</span>';
+                                            } elseif ($ans === 'CUKUP PUAS') {
+                                                echo '<span class="text-amber-600 flex items-center gap-2"><i class="fa-solid fa-face-meh text-amber-500 text-lg"></i> ' . $ans . '</span>';
+                                            } elseif ($ans === 'TIDAK PUAS') {
+                                                echo '<span class="text-rose-600 flex items-center gap-2"><i class="fa-solid fa-face-frown text-rose-500 text-lg"></i> ' . $ans . '</span>';
+                                            } else {
+                                                echo '<div class="italic text-slate-700 font-medium line-clamp-5 leading-relaxed">' . htmlspecialchars($ans) . '</div>';
+                                            }
+                                            ?>
+                                        </div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                    </div>
+                <?php endforeach; ?>
+            <?php else: ?>
+                <div class="bg-white rounded-2xl border border-slate-100 p-12 flex flex-col items-center justify-center text-center">
+                    <i class="fa-solid fa-folder-open text-5xl mb-4 text-slate-300"></i>
+                    <h3 class="text-lg font-bold text-slate-500 mb-1">Data Kosong</h3>
+                    <p class="text-slate-400 text-sm">Tidak ada respons untuk dirender pada periode filter ini.</p>
+                </div>
+            <?php endif; ?>
+        </div>
             <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                 <div class="text-xs text-slate-500 font-medium tracking-wide">
                     Menampilkan <span class="text-slate-900 font-black"><?php echo count($sessions); ?></span> dari <span class="text-slate-900 font-black"><?php echo $total_count; ?></span> responden
@@ -360,4 +468,70 @@ require_once 'includes/header.php';
             });
         });
     </script>
+    <style>
+        .screen-only { display: block; }
+        .pdf-only { display: none; }
+        
+        /* Print Stylesheet for Export PDF */
+        @media print {
+            .screen-only { display: none !important; }
+            .pdf-only { display: block !important; }
+
+            /* Show print-only elements */
+            .hidden.print-only, .print-only { display: block !important; }
+            
+            /* Hide unnecessary UI elements */
+            aside, header, nav, form, .pagination-container, .print-hidden, button[title="Cetak / Simpan PDF"], a[href^="export"] {
+                display: none !important;
+            }
+            
+            /* Expand the main container to fill the page */
+            main.max-w-\\[95\\%\\] {
+                max-width: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+            }
+            
+            body {
+                background-color: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            /* Page Print Settings */
+            @page {
+                size: portrait; /* switch back to portrait since cards adapt well */
+                margin: 10mm;
+            }
+
+            /* Adjust chart visibility and page breaks */
+            .print-chart-grid { display: block !important; margin-bottom: 2rem !important; }
+            .print-chart-grid > div { margin-bottom: 1.5rem !important; page-break-inside: avoid !important; }
+            .lg\\:col-span-2 { width: 100% !important; margin-top: 0 !important; }
+            
+            /* Chart Canvas Fix for Bleeding */
+            .h-48 { height: auto !important; max-height: 250px !important; overflow: hidden !important; }
+            canvas { max-width: 100% !important; width: 100% !important; height: auto !important; max-height: 220px !important; }
+            
+            /* Card and Grid formatting */
+            .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 12px !important; }
+            .print-session-card { border: 2px solid #cbd5e1 !important; margin-bottom: 4px !important; box-shadow: none !important; }
+            .print-qa-grid { display: block !important; }
+            .print-qa-card { display: block !important; width: 100% !important; margin-bottom: 8px !important; border: 1px solid #e2e8f0 !important; break-inside: avoid; page-break-inside: avoid; }
+            
+            /* Background colors */
+            .bg-emerald-50, .bg-amber-50, .bg-slate-50 {
+                background-color: #f8fafc !important; 
+                -webkit-print-color-adjust: exact !important;
+            }
+            .text-emerald-500, .text-emerald-600 { color: #10b981 !important; }
+            .text-amber-500, .text-amber-600 { color: #d97706 !important; }
+            .text-rose-500, .text-rose-600, .text-red-500 { color: #e11d48 !important; }
+            
+            /* Remove shadows */
+            .shadow-sm, .shadow-inner, .shadow-\\[.*\\] { box-shadow: none !important; }
+        }
+    </style>
     <?php require_once 'includes/footer.php'; ?>

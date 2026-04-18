@@ -117,13 +117,27 @@ require_once 'includes/header.php';
         <!-- List of Questions -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
             <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
-                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-list-check text-amber-500"></i>
-                         Daftar Pertanyaan <?php echo $active_filter_name ? ' - ' . htmlspecialchars($active_filter_name) : ''; ?>
-                </h2>
-                <button type="button" onclick="openAddModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 uppercase tracking-widest">
-                    <i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan
-                </button>
+                <div class="flex flex-col sm:flex-row items-center gap-3 w-full">
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 mr-auto">
+                        <i class="fa-solid fa-list-check text-amber-500"></i>
+                        Daftar Pertanyaan
+                    </h2>
+                    
+                    <form method="GET" class="w-full sm:w-auto mt-2 sm:mt-0">
+                        <select name="event_id" onchange="this.form.submit()" class="w-full sm:w-auto px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer">
+                            <option value="">Semua Event (Global)</option>
+                            <?php foreach($events as $ev): ?>
+                                <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
+                                    <?php echo htmlspecialchars($ev['name']); ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </form>
+
+                    <button type="button" onclick="openAddModal()" class="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex justify-center items-center gap-2 uppercase tracking-widest mt-2 sm:mt-0">
+                        <i class="fa-solid fa-plus-circle text-sm"></i> Tambah Pertanyaan
+                    </button>
+                </div>
             </div>
                 <div class="p-6 overflow-x-auto">
                     <table class="w-full text-left border-collapse min-w-[700px]">
@@ -161,7 +175,7 @@ require_once 'includes/header.php';
                                     </td>
                                     <td class="px-4 py-4 text-right flex justify-end gap-2">
                                         <button type="button" 
-                                                onclick='editQuestion(<?php echo json_encode($q); ?>)'
+                                                onclick="editQuestion(<?php echo htmlspecialchars(json_encode($q), ENT_QUOTES, 'UTF-8'); ?>)"
                                                 class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-black text-[11px] transition-all shadow-md flex items-center gap-1.5 uppercase tracking-wider" title="Edit Pertanyaan">
                                             <i class="fa-solid fa-pen-to-square"></i> <span>EDIT</span>
                                         </button>
@@ -215,9 +229,9 @@ require_once 'includes/header.php';
     </main>
 
     <!-- Add/Edit Question Modal -->
-    <div id="questionModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl relative z-10 animate-[fadeInScale_0.2s_ease-out] overflow-hidden">
+    <div id="questionModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:110; justify-content:center; align-items:center; padding:1rem;">
+        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(4px);" onclick="closeModal()"></div>
+        <div style="position:relative; z-index:10; width:100%; max-width:36rem; background:white; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); overflow:hidden;">
             <div id="formHeader" class="px-6 py-5 border-b border-slate-100 bg-amber-50 flex justify-between items-center transition-colors">
                 <h2 id="formTitle" class="text-lg font-bold text-amber-800 flex items-center gap-2 uppercase tracking-wider">
                     <i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan
@@ -293,9 +307,9 @@ require_once 'includes/header.php';
     </div>
 
     <!-- Delete Confirmation Modal -->
-    <div id="deleteModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
-        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeDeleteModal()"></div>
-        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md relative z-10 animate-[fadeInScale_0.2s_ease-out]">
+    <div id="deleteModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:100; justify-content:center; align-items:center; padding:1rem;">
+        <div style="position:absolute; top:0; left:0; right:0; bottom:0; background:rgba(15,23,42,0.4); backdrop-filter:blur(4px);" onclick="closeDeleteModal()"></div>
+        <div style="position:relative; z-index:10; width:100%; max-width:28rem; background:white; border-radius:1rem; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25);">
             <div class="p-8 text-center">
                 <div class="w-16 h-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6 text-2xl">
                     <i class="fa-solid fa-triangle-exclamation"></i>
@@ -304,15 +318,15 @@ require_once 'includes/header.php';
                 <p class="text-slate-500 text-sm mb-8 leading-relaxed">
                     Menghapus pertanyaan <span id="deleteItemName" class="font-bold text-slate-700"></span> akan menyembunyikannya dari kiosk dan laporan.
                 </p>
-                <div class="flex gap-3">
-                    <button type="button" onclick="closeDeleteModal()" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-colors">
+                <div style="display:flex; gap:0.75rem;">
+                    <button type="button" onclick="closeDeleteModal()" style="flex:1; padding:0.75rem 1rem; background:#f1f5f9; color:#475569; font-weight:700; border-radius:0.75rem; border:1px solid #e2e8f0; cursor:pointer; font-size:14px;">
                         Batal
                     </button>
-                    <form method="POST" id="deleteForm" class="flex-1">
+                    <form method="POST" id="deleteForm" style="flex:1;">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="id" id="deleteItemId">
                         <input type="hidden" name="event_id" value="<?php echo $filter_event_id; ?>">
-                        <button type="submit" class="w-full px-4 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-xl transition-colors shadow-lg shadow-red-500/30">
+                        <button type="submit" style="width:100%; padding:0.75rem 1rem; background:#ef4444; color:white; font-weight:700; border-radius:0.75rem; border:none; cursor:pointer; font-size:14px; box-shadow:0 4px 14px rgba(239,68,68,0.3);">
                             Ya, Hapus
                         </button>
                     </form>
@@ -355,11 +369,11 @@ require_once 'includes/header.php';
 
         function openAddModal() {
             resetForm();
-            document.getElementById('questionModal').classList.remove('hidden');
+            document.getElementById('questionModal').style.display = 'flex';
         }
 
         function closeModal() {
-            document.getElementById('questionModal').classList.add('hidden');
+            document.getElementById('questionModal').style.display = 'none';
         }
 
         function editQuestion(data) {
@@ -368,8 +382,14 @@ require_once 'includes/header.php';
             document.getElementById('question_id').value = data.id;
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Pertanyaan';
             document.getElementById('submitBtn').innerText = 'Simpan Perubahan';
-            document.getElementById('formHeader').classList.replace('bg-amber-50', 'bg-blue-50');
-            document.getElementById('formTitle').classList.replace('text-amber-800', 'text-blue-800');
+            
+            const header = document.getElementById('formHeader');
+            header.classList.remove('bg-amber-50');
+            header.classList.add('bg-blue-50');
+            
+            const title = document.getElementById('formTitle');
+            title.classList.remove('text-amber-800');
+            title.classList.add('text-blue-800');
 
             // Populate fields
             document.getElementById('field_event_id').value = data.event_id;
@@ -382,7 +402,7 @@ require_once 'includes/header.php';
             document.getElementById('field_placeholder').value = data.placeholder || '';
 
             // Show modal
-            document.getElementById('questionModal').classList.remove('hidden');
+            document.getElementById('questionModal').style.display = 'flex';
         }
 
         function resetForm() {
@@ -392,8 +412,15 @@ require_once 'includes/header.php';
             document.getElementById('question_id').value = '';
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan';
             document.getElementById('submitBtn').innerText = 'Simpan Pertanyaan';
-            document.getElementById('formHeader').classList.replace('bg-blue-50', 'bg-amber-50');
-            document.getElementById('formTitle').classList.replace('text-blue-800', 'text-amber-800');
+            
+            const header = document.getElementById('formHeader');
+            header.classList.remove('bg-blue-50');
+            header.classList.add('bg-amber-50');
+            
+            const title = document.getElementById('formTitle');
+            title.classList.remove('text-blue-800');
+            title.classList.add('text-amber-800');
+            
             document.getElementById('field_key').readOnly = true; 
             
             // Keep current event filter if any
@@ -406,11 +433,11 @@ require_once 'includes/header.php';
         function openDeleteModal(id, name) {
             document.getElementById('deleteItemId').value = id;
             document.getElementById('deleteItemName').innerText = name;
-            document.getElementById('deleteModal').classList.remove('hidden');
+            document.getElementById('deleteModal').style.display = 'flex';
         }
 
         function closeDeleteModal() {
-            document.getElementById('deleteModal').classList.add('hidden');
+            document.getElementById('deleteModal').style.display = 'none';
         }
     </script>
 <?php require_once 'includes/footer.php'; ?>
