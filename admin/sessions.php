@@ -132,6 +132,27 @@ foreach($chart_raw as $cr) {
     }
 }
 
+// Aggregation for Average Score per Question
+$avg_stmt = $pdo->prepare("
+    SELECT q.id, q.question, 
+           AVG(CASE 
+               WHEN UPPER(a.answer_value) = 'SANGAT_PUAS' THEN 4
+               WHEN UPPER(a.answer_value) = 'PUAS' THEN 3
+               WHEN UPPER(a.answer_value) = 'CUKUP_PUAS' THEN 2
+               WHEN UPPER(a.answer_value) = 'TIDAK_PUAS' THEN 1
+               ELSE 0 
+           END) as average
+    FROM survey_answers a
+    JOIN survey_sessions s ON a.session_id = s.id
+    JOIN questions q ON a.question_id = q.id
+    $where_sql AND q.type = 'rating'
+    GROUP BY q.id, q.question
+    HAVING average > 0
+    ORDER BY average DESC
+");
+$avg_stmt->execute($params);
+$avg_data = $avg_stmt->fetchAll();
+
 $query_string = http_build_query($_GET);
 
 // Setup PDF Report Headers
@@ -220,27 +241,42 @@ require_once 'includes/header.php';
             </div>
         </div>
 
-        <!-- Summary Statistics / Chart Section -->
-        <div class="print-chart-grid grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-            <!-- Stats Card 1: Total -->
-            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center">
+        <!-- Row 1: Key Stats Summary -->
+        <div class="mb-6">
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center max-w-[280px]">
                 <span class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Responden</span>
                 <div class="text-5xl font-black text-slate-800"><?php echo number_format($total_count); ?></div>
                 <div class="mt-2 text-[10px] text-emerald-500 font-bold uppercase tracking-tight flex items-center gap-1">
                     <i class="fa-solid fa-arrow-up"></i> Terkumpul dari sistem
                 </div>
             </div>
+        </div>
 
-            <!-- Stats Card 2: Chart Container -->
-            <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
-                <div class="flex justify-between items-center mb-4">
+        <!-- Row 2: Charts Side-by-Side -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10 print-chart-row">
+            <!-- Global Distribution Chart -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm print-col">
+                <div class="flex justify-between items-center mb-6">
                     <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
                         <i class="fa-solid fa-chart-simple text-amber-500"></i> Distribusi Kepuasan
                     </h3>
-                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Berdasarkan Pertanyaan Rating</span>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Global</span>
                 </div>
-                <div class="h-48">
+                <div class="h-64">
                     <canvas id="satisfactionChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Trend per Pertanyaan Chart -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm print-col">
+                <div class="flex justify-between items-center mb-6">
+                    <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <i class="fa-solid fa-chart-line text-emerald-500"></i> Trend per Pertanyaan
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Skala 1.0 - 4.0</span>
+                </div>
+                <div class="w-full overflow-y-auto" style="max-height: 400px; min-height: <?php echo min(400, count($avg_data) * 60 + 50); ?>px;">
+                    <canvas id="averageScoreChart"></canvas>
                 </div>
             </div>
         </div>
@@ -439,6 +475,26 @@ require_once 'includes/header.php';
                         barThickness: 40
                     }]
                 },
+                plugins: [{
+                    id: 'datalabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx, data } = chart;
+                        ctx.save();
+                        chart.data.datasets.forEach((dataset, i) => {
+                            chart.getDatasetMeta(i).data.forEach((bar, index) => {
+                                const val = dataset.data[index];
+                                if (val > 0) {
+                                    ctx.fillStyle = '#334155'; // Slate 700
+                                    ctx.font = 'bold 12px Inter, sans-serif';
+                                    ctx.textAlign = 'center';
+                                    ctx.textBaseline = 'bottom';
+                                    ctx.fillText(val, bar.x, bar.y - 8);
+                                }
+                            });
+                        });
+                        ctx.restore();
+                    }
+                }],
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
@@ -448,6 +504,7 @@ require_once 'includes/header.php';
                     scales: {
                         y: {
                             beginAtZero: true,
+                            grace: '15%',
                             grid: {
                                 display: true,
                                 color: 'rgba(0,0,0,0.03)'
@@ -461,6 +518,81 @@ require_once 'includes/header.php';
                             grid: { display: false },
                             ticks: {
                                 font: { size: 9, weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // NEW: Average Score Chart (Horizontal Bar)
+            const avgCtx = document.getElementById('averageScoreChart').getContext('2d');
+            new Chart(avgCtx, {
+                type: 'bar',
+                data: {
+                    labels: [
+                        <?php foreach($avg_data as $ad): ?>
+                            "<?php echo addslashes($ad['question']); ?>",
+                        <?php endforeach; ?>
+                    ],
+                    datasets: [{
+                        label: 'Skala Kepuasan',
+                        data: [
+                            <?php foreach($avg_data as $ad): ?>
+                                <?php echo number_format($ad['average'], 2); ?>,
+                            <?php endforeach; ?>
+                        ],
+                        backgroundColor: function(context) {
+                            const val = context.dataset.data[context.dataIndex];
+                            if (val >= 3.5) return 'rgba(16, 185, 129, 0.8)'; // Emerald
+                            if (val >= 3.0) return 'rgba(34, 197, 94, 0.8)';  // Green
+                            if (val >= 2.5) return 'rgba(234, 179, 8, 0.8)';  // Yellow
+                            return 'rgba(239, 68, 68, 0.8)'; // Red
+                        },
+                        borderRadius: 8,
+                        barThickness: 25
+                    }]
+                },
+                plugins: [{
+                    id: 'avgLabels',
+                    afterDatasetsDraw(chart) {
+                        const { ctx } = chart;
+                        ctx.save();
+                        chart.data.datasets.forEach((dataset, i) => {
+                            chart.getDatasetMeta(i).data.forEach((bar, index) => {
+                                const val = dataset.data[index];
+                                ctx.fillStyle = '#1e293b';
+                                ctx.font = 'bold 11px Inter, sans-serif';
+                                ctx.textAlign = 'left';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(val, bar.x + 8, bar.y);
+                            });
+                        });
+                        ctx.restore();
+                    }
+                }],
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: false,
+                            min: 1,
+                            max: 4.5, // room for labels
+                            grid: { color: 'rgba(0,0,0,0.03)' },
+                            ticks: { font: { weight: 'bold' } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 10, weight: 'bold' },
+                                callback: function(value) {
+                                    const label = this.getLabelForValue(value);
+                                    return label.length > 50 ? label.substr(0, 47) + '...' : label;
+                                }
                             }
                         }
                     }
@@ -507,23 +639,52 @@ require_once 'includes/header.php';
             }
 
             /* Adjust chart visibility and page breaks */
-            .print-chart-grid { display: block !important; margin-bottom: 2rem !important; }
-            .print-chart-grid > div { margin-bottom: 1.5rem !important; page-break-inside: avoid !important; }
+            .print-chart-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 20px !important; margin-bottom: 2rem !important; }
+            .print-chart-grid, .print-col { 
+                margin-bottom: 0 !important; 
+                page-break-inside: avoid !important;
+                border: 2px solid #e2e8f0 !important; 
+                background-color: #ffffff !important;
+                padding: 15px !important;
+                border-radius: 12px !important;
+                display: block !important;
+            }
             .lg\\:col-span-2 { width: 100% !important; margin-top: 0 !important; }
+
+            /* Fix nested chart height in PDF horizontal mode */
+            .print-col .h-64 { height: 250px !important; }
+            .print-col div[style*="max-height"] { max-height: none !important; height: auto !important; }
+            
+            /* Typography refinement for Print */
+            h3.text-sm { font-size: 14px !important; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px !important; }
+            .text-5xl { font-size: 32px !important; color: #0f172a !important; }
             
             /* Chart Canvas Fix for Bleeding */
-            .h-48 { height: auto !important; max-height: 250px !important; overflow: hidden !important; }
-            canvas { max-width: 100% !important; width: 100% !important; height: auto !important; max-height: 220px !important; }
+            .h-48, .h-48 canvas { max-height: 250px !important; }
+            canvas { max-width: 100% !important; width: 100% !important; height: auto !important; }
             
             /* Card and Grid formatting */
-            .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 12px !important; }
-            .print-session-card { border: 2px solid #cbd5e1 !important; margin-bottom: 4px !important; box-shadow: none !important; }
+            .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 15px !important; }
+            .print-session-card { 
+                border: 2px solid #cbd5e1 !important; 
+                margin-bottom: 15px !important; 
+                box-shadow: none !important; 
+                background-color: #ffffff !important;
+            }
             .print-qa-grid { display: block !important; }
-            .print-qa-card { display: block !important; width: 100% !important; margin-bottom: 8px !important; border: 1px solid #e2e8f0 !important; break-inside: avoid; page-break-inside: avoid; }
+            .print-qa-card { 
+                display: block !important; 
+                width: 100% !important; 
+                margin-bottom: 10px !important; 
+                border: 1px solid #e2e8f0 !important; 
+                break-inside: avoid; 
+                page-break-inside: avoid;
+                background-color: #f8fafc !important;
+            }
             
             /* Background colors */
-            .bg-emerald-50, .bg-amber-50, .bg-slate-50 {
-                background-color: #f8fafc !important; 
+            .bg-emerald-50, .bg-amber-50, .bg-slate-50, .bg-white {
+                background-color: #ffffff !important; 
                 -webkit-print-color-adjust: exact !important;
             }
             .text-emerald-500, .text-emerald-600 { color: #10b981 !important; }

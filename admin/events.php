@@ -95,7 +95,8 @@ require_once 'includes/header.php';
                             <?php 
                                 $protocol = isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" : "http";
                                 $host = $_SERVER['HTTP_HOST'];
-                                $base_url = "$protocol://$host/Survei/";
+                                $dir = str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME']));
+                                $base_url = $protocol . "://" . $host . rtrim(str_replace('/admin', '', $dir), '/') . '/';
                             ?>
                             <?php foreach($events as $e): ?>
                                 <?php $share_link = $base_url . "?event_id=" . maskId($e['id']); ?>
