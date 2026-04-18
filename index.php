@@ -1,11 +1,28 @@
 <?php
 session_start();
 require_once 'includes/db.php';
+require_once 'includes/utils.php';
 
-// Fetch active event
-$stmt = $pdo->prepare("SELECT * FROM events WHERE is_active = 1 LIMIT 1");
-$stmt->execute();
-$active_event = $stmt->fetch();
+// Fetch event from URL (could be masked) or active event
+$target_event_id = $_GET['event_id'] ?? null;
+
+if ($target_event_id) {
+    // Try unmasking first
+    $unmasked = unmaskId($target_event_id);
+    $actual_id = $unmasked ?: (is_numeric($target_event_id) ? $target_event_id : null);
+    
+    if ($actual_id) {
+        $stmt = $pdo->prepare("SELECT * FROM events WHERE id = ? LIMIT 1");
+        $stmt->execute([$actual_id]);
+        $active_event = $stmt->fetch();
+    }
+}
+
+if (!isset($active_event) || !$active_event) {
+    $stmt = $pdo->prepare("SELECT * FROM events WHERE is_active = 1 LIMIT 1");
+    $stmt->execute();
+    $active_event = $stmt->fetch();
+}
 
 $active_event_id = $active_event ? $active_event['id'] : null;
 $active_event_name = $active_event ? $active_event['name'] : 'Survei Umum';

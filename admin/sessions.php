@@ -23,6 +23,12 @@ if ($start_date && $end_date) {
     $where_clauses[] = "DATE(s.created_at) BETWEEN ? AND ?";
     $params[] = $start_date;
     $params[] = $end_date;
+} elseif ($start_date) {
+    $where_clauses[] = "DATE(s.created_at) >= ?";
+    $params[] = $start_date;
+} elseif ($end_date) {
+    $where_clauses[] = "DATE(s.created_at) <= ?";
+    $params[] = $end_date;
 }
 
 if ($filter_event_id) {
@@ -32,18 +38,43 @@ if ($filter_event_id) {
 
 $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
 
-$stmt = $pdo->prepare("
-    SELECT s.id as session_id, s.created_at, q.question_key, a.question_text, a.answer_value, e.name as event_name
-    FROM survey_sessions s 
-    LEFT JOIN survey_answers a ON s.id = a.session_id 
-    LEFT JOIN questions q ON a.question_id = q.id 
-    LEFT JOIN events e ON s.event_id = e.id
-    $where_sql 
-    ORDER BY s.created_at DESC, s.id DESC
-    LIMIT 1000
-");
-$stmt->execute($params);
-$raw_data = $stmt->fetchAll();
+// Pagination Logic
+$items_per_page = 15;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $items_per_page;
+
+// Count total unique sessions
+$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM survey_sessions s $where_sql");
+$count_stmt->execute($params);
+$total_count = $count_stmt->fetchColumn();
+$total_pages = ceil($total_count / $items_per_page);
+
+// Fetch only IDs for the current page
+$id_stmt = $pdo->prepare("SELECT s.id FROM survey_sessions s $where_sql ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?");
+foreach ($params as $i => $val) {
+    $id_stmt->bindValue($i + 1, $val);
+}
+$id_stmt->bindValue(count($params) + 1, $items_per_page, PDO::PARAM_INT);
+$id_stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+$id_stmt->execute();
+$session_ids = $id_stmt->fetchAll(PDO::FETCH_COLUMN);
+
+$raw_data = [];
+if (!empty($session_ids)) {
+    $placeholders = implode(',', array_fill(0, count($session_ids), '?'));
+    $stmt = $pdo->prepare("
+        SELECT s.id as session_id, s.created_at, q.question_key, a.question_text, a.answer_value, e.name as event_name
+        FROM survey_sessions s 
+        LEFT JOIN survey_answers a ON s.id = a.session_id 
+        LEFT JOIN questions q ON a.question_id = q.id 
+        LEFT JOIN events e ON s.event_id = e.id
+        WHERE s.id IN ($placeholders)
+        ORDER BY s.created_at DESC, s.id DESC
+    ");
+    $stmt->execute($session_ids);
+    $raw_data = $stmt->fetchAll();
+}
 
 $unique_qs = [];
 $sessions = [];
@@ -76,6 +107,31 @@ foreach($raw_data as $row) {
 $stmt = $pdo->query("SELECT id, name FROM events ORDER BY name ASC");
 $events_list = $stmt->fetchAll();
 
+// Aggregation for Charts (Total satisfaction breakdown)
+$agg_stmt = $pdo->prepare("
+    SELECT a.answer_value, COUNT(*) as count 
+    FROM survey_answers a 
+    JOIN survey_sessions s ON a.session_id = s.id 
+    JOIN questions q ON a.question_id = q.id
+    $where_sql AND q.type = 'rating'
+    GROUP BY a.answer_value
+");
+$agg_stmt->execute($params);
+$chart_raw = $agg_stmt->fetchAll();
+
+$chart_data = [
+    'SANGAT_PUAS' => 0,
+    'PUAS' => 0,
+    'CUKUP_PUAS' => 0,
+    'TIDAK_PUAS' => 0
+];
+foreach($chart_raw as $cr) {
+    $key = strtoupper($cr['answer_value']);
+    if(isset($chart_data[$key])) {
+        $chart_data[$key] = (int)$cr['count'];
+    }
+}
+
 $query_string = http_build_query($_GET);
 ?>
 <?php
@@ -90,10 +146,14 @@ require_once 'includes/header.php';
         <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6 gap-4">
             <form method="GET" class="flex items-end gap-3 w-full md:w-auto">
                 <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cari Kapan</label>
-                    <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none" required>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mulai</label>
+                    <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
                 </div>
-                <div class="text-slate-400 font-bold mb-2">-</div>
+                <div class="text-slate-400 font-bold mb-2">s/d</div>
+                <div>
+                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Hingga</label>
+                    <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
+                </div>
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter Event</label>
                     <select name="event_id" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
@@ -108,7 +168,7 @@ require_once 'includes/header.php';
                 <button type="submit" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] text-sm">
                     FILTER DATA
                 </button>
-                <?php if($start_date): ?>
+                <?php if($start_date || $end_date): ?>
                     <a href="sessions" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg transition-colors text-sm">RESET</a>
                 <?php endif; ?>
             </form>
@@ -117,6 +177,32 @@ require_once 'includes/header.php';
                 <i class="fa-solid fa-download"></i> Unduh Tabel (.CSV)
             </a>
         </div>
+
+        <!-- Summary Statistics / Chart Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- Stats Card 1: Total -->
+            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center">
+                <span class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Responden</span>
+                <div class="text-5xl font-black text-slate-800"><?php echo number_format($total_count); ?></div>
+                <div class="mt-2 text-[10px] text-emerald-500 font-bold uppercase tracking-tight flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-up"></i> Terkumpul dari sistem
+                </div>
+            </div>
+
+            <!-- Stats Card 2: Chart Container -->
+            <div class="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-100 shadow-sm">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <i class="fa-solid fa-chart-simple text-amber-500"></i> Distribusi Kepuasan
+                    </h3>
+                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Berdasarkan Pertanyaan Rating</span>
+                </div>
+                <div class="h-48">
+                    <canvas id="satisfactionChart"></canvas>
+                </div>
+            </div>
+        </div>
+
 
         <!-- Data Table -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
@@ -177,8 +263,101 @@ require_once 'includes/header.php';
                     </tbody>
                 </table>
             </div>
-            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 text-xs text-slate-400 font-medium">
-                Menampilkan <?php echo count($sessions); ?> respon pengunjung (*maksimal 1000 ditayangkan).
+            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div class="text-xs text-slate-500 font-medium tracking-wide">
+                    Menampilkan <span class="text-slate-900 font-black"><?php echo count($sessions); ?></span> dari <span class="text-slate-900 font-black"><?php echo $total_count; ?></span> responden
+                </div>
+
+                <!-- Pagination Nav -->
+                <?php if ($total_pages > 1): ?>
+                    <div class="flex items-center gap-1">
+                        <?php 
+                        $filter_params = $_GET;
+                        unset($filter_params['page']);
+                        $base_params = http_build_query($filter_params);
+                        $base_params = $base_params ? '&' . $base_params : '';
+                        ?>
+
+                        <?php if ($page > 1): ?>
+                            <a href="?page=<?php echo $page - 1; ?><?php echo $base_params; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all">
+                                <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                            </a>
+                        <?php endif; ?>
+
+                        <?php 
+                        $start_p = max(1, $page - 2);
+                        $end_p = min($total_pages, $page + 2);
+                        for ($i = $start_p; $i <= $end_p; $i++): 
+                        ?>
+                            <a href="?page=<?php echo $i; ?><?php echo $base_params; ?>" 
+                               class="w-9 h-9 flex items-center justify-center rounded-xl border <?php echo $i === $page ? 'bg-amber-500 border-amber-500 text-white font-black shadow-lg shadow-amber-500/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'; ?> transition-all text-xs">
+                                <?php echo $i; ?>
+                            </a>
+                        <?php endfor; ?>
+
+                        <?php if ($page < $total_pages): ?>
+                            <a href="?page=<?php echo $page + 1; ?><?php echo $base_params; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all">
+                                <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
             </div>
         </div>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const ctx = document.getElementById('satisfactionChart').getContext('2d');
+            
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['SANGAT PUAS', 'PUAS', 'CUKUP PUAS', 'TIDAK PUAS'],
+                    datasets: [{
+                        label: 'Jumlah Respon',
+                        data: [
+                            <?php echo $chart_data['SANGAT_PUAS']; ?>,
+                            <?php echo $chart_data['PUAS']; ?>,
+                            <?php echo $chart_data['CUKUP_PUAS']; ?>,
+                            <?php echo $chart_data['TIDAK_PUAS']; ?>
+                        ],
+                        backgroundColor: [
+                            'rgba(16, 185, 129, 0.8)', // Emerald 500
+                            'rgba(34, 197, 94, 0.8)',  // Green 500
+                            'rgba(245, 158, 11, 0.8)', // Amber 500
+                            'rgba(239, 68, 68, 0.8)'   // Red 500
+                        ],
+                        borderRadius: 12,
+                        barThickness: 40
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                display: true,
+                                color: 'rgba(0,0,0,0.03)'
+                            },
+                            ticks: {
+                                stepSize: 1,
+                                font: { size: 10, weight: 'bold' }
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: {
+                                font: { size: 9, weight: 'bold' }
+                            }
+                        }
+                    }
+                }
+            });
+        });
+    </script>
     <?php require_once 'includes/footer.php'; ?>

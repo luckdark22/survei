@@ -53,7 +53,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
     </nav>
 
     <!-- Toast Notification Container -->
-    <div id="toastContainer" class="fixed top-8 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-3 items-center pointer-events-none"></div>
+    <div id="toastContainer" class="fixed top-8 right-8 z-[110] flex flex-col gap-3 items-end pointer-events-none" style="left: auto !important; right: 2rem !important;"></div>
 
     <script>
         function showToast(message, type = 'success') {
@@ -62,27 +62,29 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             
             const config = {
                 success: {
-                    bg: 'bg-emerald-500/90',
-                    border: 'border-emerald-400/50',
+                    bg: 'bg-slate-900',
+                    border: 'border-emerald-500/50',
                     icon: 'fa-circle-check',
-                    shadow: 'shadow-emerald-500/20'
+                    iconColor: 'text-emerald-400',
+                    shadow: 'shadow-2xl shadow-emerald-500/20'
                 },
                 error: {
-                    bg: 'bg-rose-500/90',
-                    border: 'border-rose-400/50',
+                    bg: 'bg-slate-900',
+                    border: 'border-rose-500/50',
                     icon: 'fa-triangle-exclamation',
-                    shadow: 'shadow-rose-500/20'
+                    iconColor: 'text-rose-400',
+                    shadow: 'shadow-2xl shadow-rose-500/20'
                 }
             };
             
             const s = config[type] || config.success;
             
-            toast.className = `${s.bg} ${s.border} ${s.shadow} backdrop-blur-md border text-white px-8 py-4 rounded-full shadow-2xl flex items-center gap-4 toast-animate-in font-bold text-sm min-w-[340px] pointer-events-auto`;
+            toast.className = `${s.bg} ${s.border} ${s.shadow} px-6 py-4 rounded-full border flex items-center gap-4 toast-animate-in font-black text-xs min-w-[320px] pointer-events-auto`;
             toast.innerHTML = `
-                <div class="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center text-lg shrink-0">
+                <div class="w-7 h-7 bg-white/10 rounded-full flex items-center justify-center text-sm shrink-0 ${s.iconColor}">
                     <i class="fa-solid ${s.icon}"></i>
                 </div>
-                <div class="flex-1 text-center uppercase tracking-widest leading-none pt-0.5">${message}</div>
+                <div class="flex-1 text-center text-white font-black uppercase tracking-[0.1em] leading-none">${message}</div>
             `;
             
             container.appendChild(toast);

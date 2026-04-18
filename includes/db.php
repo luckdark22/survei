@@ -1,10 +1,15 @@
 <?php
 // includes/db.php
 
-$host = 'localhost';
-$dbname = 'db_survei_kiosk';
-$username = 'root';
-$password = '';
+require_once 'env.php';
+
+// Load environment variables
+loadEnv(__DIR__ . '/../.env');
+
+$host = getenv('DB_HOST') ?: 'localhost';
+$dbname = getenv('DB_NAME') ?: 'db_survei_kiosk';
+$username = getenv('DB_USER') ?: 'root';
+$password = getenv('DB_PASS') !== false ? getenv('DB_PASS') : '';
 
 try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname;charset=utf8mb4", $username, $password);

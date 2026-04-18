@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['success'] = "Status pertanyaan diubah!";
         } elseif ($_POST['action'] === 'delete') {
             $id = $_POST['id'];
-            $stmt = $pdo->prepare("UPDATE questions SET is_active = 0 WHERE id = ?");
+            $stmt = $pdo->prepare("DELETE FROM questions WHERE id = ?");
             $stmt->execute([$id]);
             $_SESSION['success'] = "Pertanyaan berhasil dihapus!";
         }
@@ -69,8 +69,26 @@ $filter_event_id = $_GET['event_id'] ?? null;
 $where_clause = $filter_event_id ? "WHERE q.event_id = ?" : "";
 $params = $filter_event_id ? [$filter_event_id] : [];
 
-$stmt = $pdo->prepare("SELECT q.*, e.name as event_name FROM questions q LEFT JOIN events e ON q.event_id = e.id $where_clause ORDER BY q.event_id ASC, q.order_num ASC");
-$stmt->execute($params);
+// Pagination Logic
+$items_per_page = 10;
+$page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
+if ($page < 1) $page = 1;
+$offset = ($page - 1) * $items_per_page;
+
+// Count total questions with filters
+$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM questions q $where_clause");
+$count_stmt->execute($params);
+$total_count = $count_stmt->fetchColumn();
+$total_pages = ceil($total_count / $items_per_page);
+
+// Fetch questions with events and pagination
+$stmt = $pdo->prepare("SELECT q.*, e.name as event_name FROM questions q LEFT JOIN events e ON q.event_id = e.id $where_clause ORDER BY q.event_id ASC, q.order_num ASC LIMIT ? OFFSET ?");
+foreach ($params as $i => $val) {
+    $stmt->bindValue($i + 1, $val);
+}
+$stmt->bindValue(count($params) + 1, $items_per_page, PDO::PARAM_INT);
+$stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+$stmt->execute();
 $questions = $stmt->fetchAll();
 
 // Fetch events for dropdown
@@ -96,16 +114,17 @@ require_once 'includes/header.php';
 
     <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
         
-        <div class="flex flex-col lg:flex-row gap-8">
-            
-            <!-- List of Questions -->
-            <div class="flex-1 bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-                <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
-                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                        <i class="fa-solid fa-list-check text-amber-500"></i>
+        <!-- List of Questions -->
+        <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <i class="fa-solid fa-list-check text-amber-500"></i>
                          Daftar Pertanyaan <?php echo $active_filter_name ? ' - ' . htmlspecialchars($active_filter_name) : ''; ?>
-                    </h2>
-                </div>
+                </h2>
+                <button type="button" onclick="openAddModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 uppercase tracking-widest">
+                    <i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan
+                </button>
+            </div>
                 <div class="p-6 overflow-x-auto">
                     <table class="w-full text-left border-collapse min-w-[700px]">
                         <thead>
@@ -163,83 +182,115 @@ require_once 'includes/header.php';
                         </tbody>
                     </table>
                 </div>
-            </div>
 
-            <!-- Add Form -->
-            <div id="formCard" class="lg:w-96 bg-white rounded-2xl border border-slate-100 shadow-sm self-start sticky top-24">
-                <div id="formHeader" class="px-6 py-5 border-b border-slate-100 bg-amber-50 rounded-t-2xl transition-colors duration-300">
-                    <h2 id="formTitle" class="text-lg font-bold text-amber-800 flex items-center gap-2 transition-colors duration-300">
-                        <i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan
-                    </h2>
-                </div>
-                <div class="p-6">
-                    <form id="questionForm" method="POST" class="flex flex-col gap-4">
-                        <input type="hidden" name="action" id="formAction" value="add">
-                        <input type="hidden" name="id" id="question_id" value="">
-                        
+                <!-- Pagination Footer -->
+                <?php if ($total_pages > 1): ?>
+                    <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div class="text-xs text-slate-500 font-medium">
+                            Menampilkan <span class="text-slate-800"><?php echo count($questions); ?></span> dari <span class="text-slate-800"><?php echo $total_count; ?></span> pertanyaan
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <?php if ($page > 1): ?>
+                                <a href="?page=<?php echo $page - 1; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
+                                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                                </a>
+                            <?php endif; ?>
+
+                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                                <a href="?page=<?php echo $i; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" 
+                                   class="w-9 h-9 flex items-center justify-center rounded-xl border <?php echo $i === $page ? 'bg-amber-500 border-amber-500 text-white font-black shadow-lg shadow-amber-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'; ?> transition-all text-xs">
+                                    <?php echo $i; ?>
+                                </a>
+                            <?php endfor; ?>
+
+                            <?php if ($page < $total_pages): ?>
+                                <a href="?page=<?php echo $page + 1; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
+                                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                </a>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                <?php endif; ?>
+            </div>
+    </main>
+
+    <!-- Add/Edit Question Modal -->
+    <div id="questionModal" class="hidden fixed inset-0 z-[110] flex items-center justify-center p-4">
+        <div class="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" onclick="closeModal()"></div>
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-xl relative z-10 animate-[fadeInScale_0.2s_ease-out] overflow-hidden">
+            <div id="formHeader" class="px-6 py-5 border-b border-slate-100 bg-amber-50 flex justify-between items-center transition-colors">
+                <h2 id="formTitle" class="text-lg font-bold text-amber-800 flex items-center gap-2 uppercase tracking-wider">
+                    <i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan
+                </h2>
+                <button type="button" onclick="closeModal()" class="text-slate-400 hover:text-slate-600 transition-colors">
+                    <i class="fa-solid fa-times text-xl"></i>
+                </button>
+            </div>
+            <div class="p-8">
+                <form id="questionForm" method="POST" class="flex flex-col gap-5">
+                    <input type="hidden" name="action" id="formAction" value="add">
+                    <input type="hidden" name="id" id="question_id" value="">
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
                         <div>
                             <div class="flex justify-between items-center mb-1">
-                                <label class="block text-xs font-bold text-slate-500 uppercase">Gunakan di Event</label>
-                                <?php if ($filter_event_id): ?>
-                                    <a href="questions" class="text-[10px] font-bold text-amber-600 hover:underline">Tampilkan Semua</a>
-                                <?php endif; ?>
+                                <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Gunakan di Event</label>
                             </div>
-                            <select name="event_id" id="field_event_id" onchange="location.href='questions?event_id=' + this.value" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 bg-white cursor-pointer" required>
-                                <option value="">-- Pilih Event & Filter --</option>
+                            <select name="event_id" id="field_event_id" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 bg-white cursor-pointer" required>
+                                <option value="">-- Pilih Event --</option>
                                 <?php foreach($events as $ev): ?>
                                     <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($ev['name']); ?></option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="text-[10px] text-slate-400 mt-1 italic">*Memilih event akan otomatis memfilter daftar di samping.</p>
                         </div>
 
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Question Key (ID Unik)</label>
-                            <input type="text" name="question_key" id="field_key" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm font-mono bg-slate-50 text-slate-500 focus:ring-2 focus:ring-amber-500 focus:outline-none" placeholder="Otomatis terisi..." readonly required>
-                            <p class="text-[10px] text-slate-400 mt-1">ID ini digenerate otomatis dari teks pertanyaan.</p>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ID Unik (Key)</label>
+                            <input type="text" name="question_key" id="field_key" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono bg-slate-50 text-slate-500 focus:outline-none" placeholder="Otomatis..." readonly required>
                         </div>
-                        
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Bagian Header (Section)</label>
-                            <input type="text" name="section" id="field_section" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none" placeholder="contoh: PELAYANAN STAF" required>
-                        </div>
-                        
-                        <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Teks Pertanyaan Lengkap</label>
-                            <textarea name="question" id="field_question" oninput="autoGenerateKey(this.value)" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm h-24 focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none" placeholder="Isi pertanyaan yang akan tampil di layar..." required></textarea>
-                        </div>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Bagian Header (Section)</label>
+                        <input type="text" name="section" id="field_section" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-bold text-slate-700" placeholder="contoh: PELAYANAN STAF / FASILITAS" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Teks Pertanyaan</label>
+                        <textarea name="question" id="field_question" oninput="autoGenerateKey(this.value)" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm h-24 focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none font-bold text-slate-700" placeholder="Apa yang ingin Anda tanyakan?" required></textarea>
+                    </div>
 
-                        <div class="flex gap-4">
-                            <div class="flex-1">
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Tipe</label>
-                                <select name="type" id="field_type" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 bg-white" required>
-                                    <option value="rating">Emoji Rating</option>
-                                    <option value="text">Teks Input / Saran</option>
-                                </select>
-                            </div>
-                            <div class="w-20">
-                                <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Urutan</label>
-                                <input type="number" name="order_num" id="field_order_num" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500" value="5" required>
-                            </div>
-                        </div>
-
+                    <div class="grid grid-cols-2 gap-5">
                         <div>
-                            <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Placeholder (Khusus tipe Teks)</label>
-                            <input type="text" name="placeholder" id="field_placeholder" class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none" placeholder="Kosongkan jika tipe rating...">
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tipe Input</label>
+                            <select name="type" id="field_type" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 bg-white" required>
+                                <option value="rating">Emoji Rating</option>
+                                <option value="text">Teks / Saran</option>
+                            </select>
                         </div>
+                        <div>
+                            <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">No. Urut</label>
+                            <input type="number" name="order_num" id="field_order_num" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 font-bold text-slate-700" value="5" required>
+                        </div>
+                    </div>
 
-                        <button type="submit" id="submitBtn" class="mt-2 w-full bg-amber-500 hover:bg-amber-600 text-white font-black py-3 rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] uppercase tracking-widest">
+                    <div>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Placeholder (Khusus Teks)</label>
+                        <input type="text" name="placeholder" id="field_placeholder" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium text-slate-600" placeholder="Tulis masukan Anda di sini...">
+                    </div>
+
+                    <div class="flex gap-3 mt-2">
+                        <button type="button" onclick="closeModal()" class="flex-1 px-4 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-xl transition-all uppercase tracking-widest text-xs border border-slate-200">
+                            Batal
+                        </button>
+                        <button type="submit" id="submitBtn" class="flex-[2] bg-amber-500 hover:bg-amber-600 text-white font-black py-3 rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] uppercase tracking-widest text-xs">
                             Simpan Pertanyaan
                         </button>
-                        <button type="button" id="cancelBtn" onclick="resetForm()" class="hidden w-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-black py-3 rounded-xl transition-all uppercase tracking-widest border border-slate-200">
-                            Batal Edit
-                        </button>
-                    </form>
-                </div>
+                    </div>
+                </form>
             </div>
-
         </div>
-    </main>
+    </div>
 
     <!-- Delete Confirmation Modal -->
     <div id="deleteModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -302,28 +353,36 @@ require_once 'includes/header.php';
             keyField.value = slug ? 'q_' + slug + '_' + currentRandomSuffix : '';
         }
 
+        function openAddModal() {
+            resetForm();
+            document.getElementById('questionModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('questionModal').classList.add('hidden');
+        }
+
         function editQuestion(data) {
-            // Scroll to form
-            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
-            
             // Switch form mode
             document.getElementById('formAction').value = 'edit';
             document.getElementById('question_id').value = data.id;
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-pen-to-square"></i> Edit Pertanyaan';
             document.getElementById('submitBtn').innerText = 'Simpan Perubahan';
-            document.getElementById('cancelBtn').classList.remove('hidden');
             document.getElementById('formHeader').classList.replace('bg-amber-50', 'bg-blue-50');
             document.getElementById('formTitle').classList.replace('text-amber-800', 'text-blue-800');
 
             // Populate fields
             document.getElementById('field_event_id').value = data.event_id;
             document.getElementById('field_key').value = data.question_key;
-            document.getElementById('field_key').readOnly = true; // Still readonly in edit for safety, or false if you want
+            document.getElementById('field_key').readOnly = true; 
             document.getElementById('field_section').value = data.section;
             document.getElementById('field_question').value = data.question;
             document.getElementById('field_type').value = data.type;
             document.getElementById('field_order_num').value = data.order_num;
             document.getElementById('field_placeholder').value = data.placeholder || '';
+
+            // Show modal
+            document.getElementById('questionModal').classList.remove('hidden');
         }
 
         function resetForm() {
@@ -333,7 +392,6 @@ require_once 'includes/header.php';
             document.getElementById('question_id').value = '';
             document.getElementById('formTitle').innerHTML = '<i class="fa-solid fa-plus-circle"></i> Tambah Pertanyaan';
             document.getElementById('submitBtn').innerText = 'Simpan Pertanyaan';
-            document.getElementById('cancelBtn').classList.add('hidden');
             document.getElementById('formHeader').classList.replace('bg-blue-50', 'bg-amber-50');
             document.getElementById('formTitle').classList.replace('text-blue-800', 'text-amber-800');
             document.getElementById('field_key').readOnly = true; 
