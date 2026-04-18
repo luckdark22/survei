@@ -1,0 +1,25 @@
+# Use index.php as default document
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /Survei/
+
+    # 1. Redirect direct .php requests to extensionless URLs (except for actual files that should be accessible)
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /Survei/(([^/]+/)*[^.\ ]+)\.php\ HTTP/
+    RewriteRule ^(([^/]+/)*[^.]+)\.php$ $1 [R=301,L]
+
+    # 2. Redirect /index to /
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,9}\ /Survei/index\ HTTP/
+    RewriteRule ^index$ ./ [R=301,L]
+
+    # 3. Internal rewrite: extensionless to .php
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}\.php -f
+    RewriteRule ^([^.]+)$ $1.php [L]
+
+    # 4. Handle root directory (internally rewrite / to index.php)
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^$ index.php [L]
+</IfModule>

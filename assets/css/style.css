@@ -1,0 +1,79 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@theme {
+  --font-sans: "Inter", sans-serif;
+  --color-dinas-yellow: #f9c20a;
+  
+  --animate-gradient: gradientBG 15s ease infinite;
+  --animate-fade-in-scale: fadeInScale 0.6s ease-out;
+  --animate-fade-out-scale: fadeOutScale 0.4s ease-in forwards;
+  --animate-marquee: marquee 25s linear infinite;
+  --animate-pulse-slow: pulse 1s infinite;
+}
+
+@layer utilities {
+  .keyboard-active {
+    bottom: 0 !important;
+  }
+}
+
+/* Base resets handled by Tailwind, adding specific animations */
+@keyframes gradientBG {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+}
+
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.95) translateY(20px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+@keyframes fadeOutScale {
+    from { opacity: 1; transform: scale(1) translateY(0); }
+    to { opacity: 0; transform: scale(0.95) translateY(-20px); }
+}
+
+@keyframes marquee {
+    0% { transform: translateX(100vw); }
+    100% { transform: translateX(-100%); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+/* Virtual Keyboard Keys Override */
+/* Maintaining complex key setups in CSS for cleanliness, could migrate to Tailwind heavily but CSS is cleaner here */
+.key {
+    @apply bg-white border border-slate-200 rounded-lg min-w-[50px] h-[60px] flex items-center justify-center font-bold text-lg cursor-pointer transition-all duration-300 shadow-sm select-none;
+}
+.key:hover {
+    @apply bg-amber-50 -translate-y-0.5 border-amber-400 text-amber-700;
+}
+.key:active {
+    @apply translate-y-[1px] bg-amber-500 text-white;
+}
+.key[data-key="backspace"], .key[data-key="enter"], .key[data-key="shift"] {
+    @apply bg-slate-100 text-slate-700 min-w-[100px];
+}
+.key[data-key="space"] {
+    @apply min-w-[300px];
+}
+.key[data-key="enter"] {
+    @apply bg-amber-600 text-white border-amber-600;
+}
+
+/* Dim unselected options when one is selected */
+.survey-options-grid.has-selection .option-card:not(.selected) {
+    opacity: 0.4;
+    transform: scale(0.95);
+    filter: grayscale(0.8);
+}
+
+@media (max-width: 768px) {
+    .key { @apply min-w-[35px] h-[50px] text-sm; }
+}
