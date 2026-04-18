@@ -86,9 +86,17 @@ if (!isset($_SESSION['current_question_index'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (isset($_POST['action'])) {
         if ($_POST['action'] === 'next' || $_POST['action'] === 'submit') {
-            // Save response to session temporarily
             $question_id = $_POST['question_id'];
-            $_SESSION['responses'][$question_id] = $_POST['response'];
+            $response = trim($_POST['response'] ?? '');
+            
+            // SERVER-SIDE VALIDATION: Reject truly empty answers
+            if ($response === '') {
+                header("Location: ./" . (isset($_GET['event_id']) ? "?event_id=" . $_GET['event_id'] : ""));
+                exit;
+            }
+
+            // Save response to session temporarily
+            $_SESSION['responses'][$question_id] = $response;
 
             // Advance to next question
             if ($_SESSION['current_question_index'] < count($questions) - 1) {
@@ -96,6 +104,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } else {
                 // LAST QUESTION: Save to Database
                 if (!isset($_SESSION['is_finished'])) {
+                    // Safety check: ensure we have at least some data
+                    if (empty($_SESSION['responses'])) {
+                        header("Location: ./" . (isset($_GET['event_id']) ? "?event_id=" . $_GET['event_id'] : ""));
+                        exit;
+                    }
+
                     try {
                         $pdo->beginTransaction();
                         $stmt = $pdo->prepare("INSERT INTO survey_sessions (device_id, event_id) VALUES ('kiosk_main', ?)");
@@ -128,11 +142,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     setcookie("survey_submitted_" . $active_event_id, "1", time() + (86400 * 365), "/");
                 }
             }
+
+            // REDIRECT - Prevent skip on refresh (Post-Redirect-Get)
+            header("Location: ./" . (isset($_GET['event_id']) ? "?event_id=" . $_GET['event_id'] : ""));
+            exit;
         } elseif ($_POST['action'] === 'prev') {
             // Go back
             if ($_SESSION['current_question_index'] > 0) {
                 $_SESSION['current_question_index']--;
             }
+            
+            // REDIRECT - Prevent re-submission on refresh
+            header("Location: ./" . (isset($_GET['event_id']) ? "?event_id=" . $_GET['event_id'] : ""));
+            exit;
         } elseif ($_POST['action'] === 'restart') {
             // Reset survey
             unset($_SESSION['current_question_index']);

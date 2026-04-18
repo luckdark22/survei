@@ -5,6 +5,50 @@ document.addEventListener('DOMContentLoaded', function() {
     const feedbackTextarea = document.querySelector('.feedback-textarea');
     const virtualKeyboard = document.getElementById('virtualKeyboard');
 
+    // --- Form Safeguards ---
+    if (surveyForm) {
+        let lastClickedButton = null;
+
+        // Track which button was clicked (more compatible than e.submitter for older browsers/kiosks)
+        const allSubmitButtons = surveyForm.querySelectorAll('button[type="submit"]');
+        allSubmitButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                lastClickedButton = this;
+            });
+        });
+
+        // Prevent accidental submission via Enter key (especially on touch keyboards)
+        surveyForm.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const activeElement = document.activeElement;
+                // Allow enter only on buttons that are not disabled
+                if (activeElement.tagName !== 'BUTTON' || activeElement.disabled) {
+                    e.preventDefault();
+                    return false;
+                }
+            }
+        });
+
+        // Final sanity check on submission
+        surveyForm.addEventListener('submit', function(e) {
+            const responseInput = surveyForm.querySelector('[name="response"]:checked, textarea[name="response"]');
+            // Use tracked button instead of e.submitter for broad compatibility
+            const action = lastClickedButton ? lastClickedButton.value : '';
+            
+            // If going backwards (KEMBALI), always allow it
+            if (action === 'prev') {
+                return true;
+            }
+
+            // For next/submit, validate answers
+            if (!responseInput || (responseInput.tagName === 'TEXTAREA' && responseInput.value.trim().length < 3)) {
+                e.preventDefault();
+                console.warn('Submission blocked: Response missing or too short.');
+                return false;
+            }
+        });
+    }
+
     // --- Survey Interactivity (Ratings) ---
     optionCards.forEach(card => {
         card.addEventListener('click', function() {
