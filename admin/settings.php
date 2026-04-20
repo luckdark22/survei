@@ -3,6 +3,13 @@ require_once '../includes/db.php';
 require_once '../includes/auth.php';
 checkAuth();
 
+// ONLY ADMIN can access global settings
+if (!isAdmin()) {
+    $_SESSION['error'] = "Hanya Admin yang dapat merubah pengaturan global.";
+    header("Location: ./");
+    exit;
+}
+
 $success = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

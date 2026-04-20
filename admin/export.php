@@ -7,10 +7,13 @@ $start_date = $_GET['start_date'] ?? '';
 $end_date = $_GET['end_date'] ?? '';
 $filter_event_id = $_GET['event_id'] ?? '';
 
-// If no event filter is set, default to active event
+// If no event filter is set, default to active event (owned by user if staff)
 if (empty($filter_event_id)) {
-    $stmt = $pdo->query("SELECT id FROM events WHERE is_active = 1 LIMIT 1");
-    $active_id = $stmt->fetchColumn();
+    $sql_active = "SELECT id FROM events WHERE is_active = 1";
+    if (isStaff()) $sql_active .= " AND user_id = " . (int)getUserId();
+    $sql_active .= " LIMIT 1";
+    
+    $active_id = $pdo->query($sql_active)->fetchColumn();
     if ($active_id) {
         $filter_event_id = $active_id;
     }
@@ -26,8 +29,20 @@ if ($start_date && $end_date) {
 }
 
 if ($filter_event_id) {
+    if (isStaff()) {
+        // Double check ownership
+        $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+        $check->execute([$filter_event_id, getUserId()]);
+        if (!$check->fetch()) {
+            $_SESSION['error'] = "Akses ditolak.";
+            header("Location: dashboard"); exit;
+        }
+    }
     $where_clause_array[] = "s.event_id = ?";
     $params[] = $filter_event_id;
+} elseif (isStaff()) {
+    $where_clause_array[] = "s.event_id IN (SELECT id FROM events WHERE user_id = ?)";
+    $params[] = getUserId();
 }
 
 $where_clause = count($where_clause_array) > 0 ? "WHERE " . implode(" AND ", $where_clause_array) : "";

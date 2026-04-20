@@ -126,15 +126,20 @@ document.addEventListener('DOMContentLoaded', function() {
             virtualKeyboard.innerHTML = '';
             keyboardLayout.forEach(row => {
                 const rowDiv = document.createElement('div');
-                rowDiv.className = 'flex justify-center gap-2 mb-2';
+                rowDiv.className = 'keyboard-row';
                 
                 row.forEach(key => {
                     const keyBtn = document.createElement('div');
-                    keyBtn.className = 'key';
+                    keyBtn.className = 'keyboard-key';
                     keyBtn.dataset.key = key;
+                    
+                    // Add special classes for styling
+                    if (key === 'backspace' || key === 'shift') keyBtn.classList.add('key-special', 'key-wide');
+                    if (key === 'enter') keyBtn.classList.add('key-enter');
+                    if (key === 'space') keyBtn.classList.add('key-space');
 
                     let label = key;
-                    if (key === 'backspace') label = '<i class="fa-solid fa-backspace"></i>';
+                    if (key === 'backspace') label = '<i class="fa-solid fa-delete-left"></i>';
                     else if (key === 'shift') label = '<i class="fa-solid fa-arrow-up"></i>';
                     else if (key === 'space') label = 'SPACE';
                     else if (key === 'enter') label = 'ENTER';

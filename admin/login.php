@@ -18,7 +18,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($user && password_verify($password, $user['password'])) {
         $_SESSION['admin_logged_in'] = true;
+        $_SESSION['user_id'] = $user['id'];
         $_SESSION['admin_username'] = $user['username'];
+        $_SESSION['user_role'] = $user['role']; // e.g., 'admin' or 'staff'
         header("Location: ./");
         exit;
     } else {

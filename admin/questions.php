@@ -13,7 +13,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $type = $_POST['type'] ?? 'rating';
             $order_num = $_POST['order_num'] ?? 0;
             $placeholder = $_POST['placeholder'] ?? '';
-            $event_id = $_POST['event_id'] ?? null;
+            $event_id = $_POST['event_id'] ?: null;
+
+            // RBAC: Staff cannot create global questions
+            if (isStaff() && !$event_id) {
+                $_SESSION['error'] = "Staff hanya diperbolehkan membuat pertanyaan untuk event.";
+                header("Location: questions"); exit;
+            }
+
+            // RBAC: Staff must own the event
+            if (isStaff() && $event_id) {
+                $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+                $check->execute([$event_id, getUserId()]);
+                if (!$check->fetch()) {
+                    $_SESSION['error'] = "Anda tidak memiliki akses ke event ini.";
+                    header("Location: questions"); exit;
+                }
+            }
             
             if ($type === 'rating') $placeholder = null;
 
@@ -22,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder]);
                 $_SESSION['success'] = "Pertanyaan berhasil ditambahkan!";
             } catch (PDOException $e) {
-                die($e->getMessage());
-            } // Handle duplicate keys silently for simplicity in this demo
+                $_SESSION['error'] = "Gagal menambah: " . $e->getMessage();
+            }
             
         } elseif ($_POST['action'] === 'edit') {
             $id = $_POST['id'];
@@ -33,7 +49,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $type = $_POST['type'] ?? 'rating';
             $order_num = $_POST['order_num'] ?? 0;
             $placeholder = $_POST['placeholder'] ?? '';
-            $event_id = $_POST['event_id'] ?? null;
+            $event_id = $_POST['event_id'] ?: null;
+
+            // Security Check: Existing question ownership
+            $stmt_old = $pdo->prepare("SELECT event_id FROM questions WHERE id = ?");
+            $stmt_old->execute([$id]);
+            $old_q = $stmt_old->fetch();
+
+            if (isStaff()) {
+                // Cannot edit global question
+                if (!$old_q['event_id']) {
+                    $_SESSION['error'] = "Staff tidak diizinkan mengubah pertanyaan publik.";
+                    header("Location: questions"); exit;
+                }
+                // Must own the original event
+                $check_own = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+                $check_own->execute([$old_q['event_id'], getUserId()]);
+                if (!$check_own->fetch()) {
+                    $_SESSION['error'] = "Akses ditolak.";
+                    header("Location: questions"); exit;
+                }
+            }
 
             if ($type === 'rating') $placeholder = null;
 
@@ -42,19 +78,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder, $id]);
                 $_SESSION['success'] = "Pertanyaan berhasil diperbarui!";
             } catch (PDOException $e) {
-                die($e->getMessage());
+                $_SESSION['error'] = "Gagal simpan: " . $e->getMessage();
             }
             
-        } elseif ($_POST['action'] === 'toggle') {
+        } elseif ($_POST['action'] === 'toggle' || $_POST['action'] === 'delete') {
             $id = $_POST['id'];
-            $stmt = $pdo->prepare("UPDATE questions SET is_active = NOT is_active WHERE id = ?");
-            $stmt->execute([$id]);
-            $_SESSION['success'] = "Status pertanyaan diubah!";
-        } elseif ($_POST['action'] === 'delete') {
-            $id = $_POST['id'];
-            $stmt = $pdo->prepare("DELETE FROM questions WHERE id = ?");
-            $stmt->execute([$id]);
-            $_SESSION['success'] = "Pertanyaan berhasil dihapus!";
+            
+            // Security Check
+            if (isStaff()) {
+                $stmt_check = $pdo->prepare("SELECT q.id FROM questions q JOIN events e ON q.event_id = e.id WHERE q.id = ? AND e.user_id = ?");
+                $stmt_check->execute([$id, getUserId()]);
+                if (!$stmt_check->fetch()) {
+                    $_SESSION['error'] = "Akses ditolak.";
+                    header("Location: questions"); exit;
+                }
+            }
+
+            if ($_POST['action'] === 'toggle') {
+                $stmt = $pdo->prepare("UPDATE questions SET is_active = NOT is_active WHERE id = ?");
+                $stmt->execute([$id]);
+                $_SESSION['success'] = "Status pertanyaan diubah!";
+            } else {
+                $stmt = $pdo->prepare("DELETE FROM questions WHERE id = ?");
+                $stmt->execute([$id]);
+                $_SESSION['success'] = "Pertanyaan berhasil dihapus!";
+            }
         }
         
             // Redirect to avoid form resubmission and maintain filter context
@@ -64,10 +112,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Fetch all questions with event names
+// Base filtering
+$where_clauses = [];
+$params = [];
+
+if (isStaff()) {
+    $where_clauses[] = "q.event_id IN (SELECT id FROM events WHERE user_id = ?)";
+    $params[] = getUserId();
+}
+
 $filter_event_id = $_GET['event_id'] ?? null;
-$where_clause = $filter_event_id ? "WHERE q.event_id = ?" : "";
-$params = $filter_event_id ? [$filter_event_id] : [];
+if ($filter_event_id) {
+    if (isStaff()) {
+        $where_clauses[] = "q.event_id = ?";
+        $params[] = $filter_event_id;
+    } else {
+        $where_clauses[] = "q.event_id = ?";
+        $params[] = $filter_event_id;
+    }
+} elseif (isStaff()) {
+    // If staff but no specific filter, results are already scoped by the first where_clause
+} else {
+    // Admin with no filter: show ALL including global
+}
+
+$where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
 
 // Pagination Logic
 $items_per_page = 10;
@@ -76,13 +145,13 @@ if ($page < 1) $page = 1;
 $offset = ($page - 1) * $items_per_page;
 
 // Count total questions with filters
-$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM questions q $where_clause");
+$count_stmt = $pdo->prepare("SELECT COUNT(*) FROM questions q $where_sql");
 $count_stmt->execute($params);
 $total_count = $count_stmt->fetchColumn();
 $total_pages = ceil($total_count / $items_per_page);
 
 // Fetch questions with events and pagination
-$stmt = $pdo->prepare("SELECT q.*, e.name as event_name FROM questions q LEFT JOIN events e ON q.event_id = e.id $where_clause ORDER BY q.event_id ASC, q.order_num ASC LIMIT ? OFFSET ?");
+$stmt = $pdo->prepare("SELECT q.*, e.name as event_name FROM questions q LEFT JOIN events e ON q.event_id = e.id $where_sql ORDER BY q.event_id ASC, q.order_num ASC LIMIT ? OFFSET ?");
 foreach ($params as $i => $val) {
     $stmt->bindValue($i + 1, $val);
 }
@@ -91,9 +160,11 @@ $stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
 $stmt->execute();
 $questions = $stmt->fetchAll();
 
-// Fetch events for dropdown
-$stmt = $pdo->query("SELECT id, name FROM events ORDER BY name ASC");
-$events = $stmt->fetchAll();
+// Fetch events for dropdown (filtered for staff)
+$sql_ev = "SELECT id, name FROM events WHERE is_deleted = 0";
+if (isStaff()) $sql_ev .= " AND user_id = " . (int)getUserId();
+$sql_ev .= " ORDER BY name ASC";
+$events = $pdo->query($sql_ev)->fetchAll();
 
 // Fetch current filter event name
 $active_filter_name = "";
@@ -125,7 +196,11 @@ require_once 'includes/header.php';
                     
                     <form method="GET" class="w-full sm:w-auto mt-2 sm:mt-0">
                         <select name="event_id" onchange="this.form.submit()" class="w-full sm:w-auto px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer">
-                            <option value="">Semua Event (Global)</option>
+                            <?php if (isAdmin()): ?>
+                                <option value="">Semua Event (Global)</option>
+                            <?php else: ?>
+                                <option value="">Semua Event Saya</option>
+                            <?php endif; ?>
                             <?php foreach($events as $ev): ?>
                                 <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
                                     <?php echo htmlspecialchars($ev['name']); ?>

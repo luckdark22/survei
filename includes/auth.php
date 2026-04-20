@@ -8,4 +8,16 @@ function checkAuth() {
         exit;
     }
 }
+
+function isAdmin() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'admin';
+}
+
+function isStaff() {
+    return isset($_SESSION['user_role']) && $_SESSION['user_role'] === 'staff';
+}
+
+function getUserId() {
+    return $_SESSION['user_id'] ?? null;
+}
 ?>

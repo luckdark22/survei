@@ -7,10 +7,13 @@ $start_date = $_GET['start_date'] ?? '';
 $end_date = $_GET['end_date'] ?? '';
 $filter_event_id = $_GET['event_id'] ?? '';
 
-// If no event filter is set, default to the active event
+// If no event filter is set, default to the active event (that the user owns if staff)
 if (empty($filter_event_id)) {
-    $stmt = $pdo->query("SELECT id FROM events WHERE is_active = 1 LIMIT 1");
-    $active_id = $stmt->fetchColumn();
+    $sql_active = "SELECT id FROM events WHERE is_active = 1";
+    if (isStaff()) $sql_active .= " AND user_id = " . (int)getUserId();
+    $sql_active .= " LIMIT 1";
+    
+    $active_id = $pdo->query($sql_active)->fetchColumn();
     if ($active_id) {
         $filter_event_id = $active_id;
     }
@@ -31,6 +34,11 @@ if ($filter_event_id) {
     $where_clause_sessions[] = "event_id = ?";
     $where_clause_answers[] = "s.event_id = ?";
     $params[] = $filter_event_id;
+} elseif (isStaff()) {
+    // If staff and no specific event selected, scope to ALL events owned by this staff
+    $where_clause_sessions[] = "event_id IN (SELECT id FROM events WHERE user_id = ?)";
+    $where_clause_answers[] = "s.event_id IN (SELECT id FROM events WHERE user_id = ?)";
+    $params[] = getUserId();
 }
 
 $session_where = count($where_clause_sessions) > 0 ? "WHERE " . implode(" AND ", $where_clause_sessions) : "";
@@ -41,9 +49,11 @@ $stmt = $pdo->prepare("SELECT COUNT(*) FROM survey_sessions $session_where");
 $stmt->execute($params);
 $total_sessions = $stmt->fetchColumn();
 
-// Fetch events for filter
-$stmt = $pdo->query("SELECT id, name FROM events ORDER BY name ASC");
-$events_list = $stmt->fetchAll();
+// Fetch events for filter (staff only see their own)
+$sql_ev = "SELECT id, name FROM events WHERE is_deleted = 0";
+if (isStaff()) $sql_ev .= " AND user_id = " . (int)getUserId();
+$sql_ev .= " ORDER BY name ASC";
+$events_list = $pdo->query($sql_ev)->fetchAll();
 
 // Fetch rating breakdowns for charts
 $stmt = $pdo->prepare("
@@ -143,7 +153,7 @@ require_once 'includes/header.php';
                 <div>
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter Event</label>
                     <select name="event_id" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
-                        <option value="">Semua Event</option>
+                        <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Semua Event'; ?></option>
                         <?php foreach($events_list as $ev): ?>
                             <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($ev['name']); ?>

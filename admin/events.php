@@ -11,21 +11,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = $_POST['name'] ?? '';
             $description = $_POST['description'] ?? '';
             $expires_at = $_POST['expires_at'] ?: null;
+            $user_id = getUserId();
             
-            $stmt = $pdo->prepare("INSERT INTO events (name, description, expires_at, is_active) VALUES (?, ?, ?, 0)");
-            $stmt->execute([$name, $description, $expires_at]);
+            $stmt = $pdo->prepare("INSERT INTO events (name, description, expires_at, is_active, user_id) VALUES (?, ?, ?, 0, ?)");
+            $stmt->execute([$name, $description, $expires_at, $user_id]);
             $_SESSION['success'] = "Event '$name' berhasil ditambahkan!";
             
         } elseif ($_POST['action'] === 'activate') {
             $id = $_POST['id'];
-            // Deactivate all first
-            $pdo->exec("UPDATE events SET is_active = 0");
+            
+            // Check ownership for staff
+            if (isStaff()) {
+                $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+                $check->execute([$id, getUserId()]);
+                if (!$check->fetch()) {
+                    $_SESSION['error'] = "Anda tidak memiliki akses ke event ini.";
+                    header("Location: events"); exit;
+                }
+            }
+
+            // Deactivate all first (for this user if staff, or all if admin)
+            if (isAdmin()) {
+                $pdo->exec("UPDATE events SET is_active = 0");
+            } else {
+                $pdo->prepare("UPDATE events SET is_active = 0 WHERE user_id = ?")->execute([getUserId()]);
+            }
+            
             // Activate selected
             $stmt = $pdo->prepare("UPDATE events SET is_active = 1 WHERE id = ?");
             $stmt->execute([$id]);
             $_SESSION['success'] = "Event berhasil diaktifkan!";
         } elseif ($_POST['action'] === 'delete') {
             $id = $_POST['id'];
+            
+            // Check ownership for staff
+            if (isStaff()) {
+                $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+                $check->execute([$id, getUserId()]);
+                if (!$check->fetch()) {
+                    $_SESSION['error'] = "Anda tidak memiliki akses untuk menghapus event ini.";
+                    header("Location: events"); exit;
+                }
+            }
+
             // Soft delete event
             $stmt = $pdo->prepare("UPDATE events SET is_deleted = 1 WHERE id = ?");
             $stmt->execute([$id]);
@@ -35,6 +63,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = $_POST['name'] ?? '';
             $description = $_POST['description'] ?? '';
             $expires_at = $_POST['expires_at'] ?: null;
+
+            // Check ownership for staff
+            if (isStaff()) {
+                $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+                $check->execute([$id, getUserId()]);
+                if (!$check->fetch()) {
+                    $_SESSION['error'] = "Anda tidak memiliki akses untuk mengedit event ini.";
+                    header("Location: events"); exit;
+                }
+            }
             
             $stmt = $pdo->prepare("UPDATE events SET name = ?, description = ?, expires_at = ? WHERE id = ?");
             $stmt->execute([$name, $description, $expires_at, $id]);
@@ -52,14 +90,29 @@ $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
 $offset = ($page - 1) * $items_per_page;
 
-// Count total events (excluding deleted)
-$total_count = $pdo->query("SELECT COUNT(*) FROM events WHERE is_deleted = 0")->fetchColumn();
+// Base query for counting and fetching
+$where_clause = "WHERE is_deleted = 0";
+$query_params = [];
+
+if (isStaff()) {
+    $where_clause .= " AND user_id = ?";
+    $query_params[] = getUserId();
+}
+
+// Count total events
+$stmt_count = $pdo->prepare("SELECT COUNT(*) FROM events $where_clause");
+$stmt_count->execute($query_params);
+$total_count = $stmt_count->fetchColumn();
 $total_pages = ceil($total_count / $items_per_page);
 
-// Fetch events with pagination (excluding deleted)
-$stmt = $pdo->prepare("SELECT * FROM events WHERE is_deleted = 0 ORDER BY created_at DESC LIMIT ? OFFSET ?");
-$stmt->bindValue(1, $items_per_page, PDO::PARAM_INT);
-$stmt->bindValue(2, $offset, PDO::PARAM_INT);
+// Fetch events with pagination
+$sql = "SELECT * FROM events $where_clause ORDER BY created_at DESC LIMIT ? OFFSET ?";
+$stmt = $pdo->prepare($sql);
+foreach ($query_params as $i => $val) {
+    $stmt->bindValue($i + 1, $val);
+}
+$stmt->bindValue(count($query_params) + 1, $items_per_page, PDO::PARAM_INT);
+$stmt->bindValue(count($query_params) + 2, $offset, PDO::PARAM_INT);
 $stmt->execute();
 $events = $stmt->fetchAll();
 ?>

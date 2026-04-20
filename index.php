@@ -88,9 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($_POST['action'] === 'next' || $_POST['action'] === 'submit') {
             $question_id = $_POST['question_id'];
             $response = trim($_POST['response'] ?? '');
-            
-            // SERVER-SIDE VALIDATION: Reject truly empty answers
-            if ($response === '') {
+            // SERVER-SIDE VALIDATION: Reject empty or too short answers
+            $is_text_type = false;
+            foreach ($questions as $q) {
+                if ($q['id'] == $question_id && $q['type'] === 'text') {
+                    $is_text_type = true;
+                    break;
+                }
+            }
+
+            if ($response === '' || ($is_text_type && strlen($response) < 4)) {
                 header("Location: ./" . (isset($_GET['event_id']) ? "?event_id=" . $_GET['event_id'] : ""));
                 exit;
             }
@@ -125,7 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                     break;
                                 }
                             }
-                            $stmt->execute([$session_id, $q_id, $q_text, $ans]);
+                            
+                            // Safety cast to string to prevent NULL integrity violation
+                            $final_ans = (string)($ans ?? '');
+                            $stmt->execute([$session_id, (int)$q_id, $q_text, $final_ans]);
                         }
                         $pdo->commit();
                     } catch(PDOException $e) {
@@ -213,6 +223,92 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
         .modal-content-active {
             transform: scale(1) !important;
             opacity: 1 !important;
+        }
+
+        /* Virtual Keyboard Premium Styling */
+        .keyboard-container {
+            position: fixed;
+            bottom: -100%;
+            left: 0;
+            width: 100%;
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            padding: 20px 0;
+            z-index: 1000;
+            transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.1), 0 -2px 0 rgba(255, 255, 255, 0.5);
+            border-top: 1px solid rgba(255, 255, 255, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+        .keyboard-container.keyboard-active {
+            bottom: 0;
+        }
+        .keyboard-row {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+            width: 100%;
+            max-width: 900px;
+            padding: 0 10px;
+        }
+        .keyboard-key {
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 12px 0;
+            min-width: 45px;
+            flex: 1;
+            font-weight: 700;
+            color: #1e293b;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 0 #e2e8f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            text-transform: lowercase;
+            font-size: 14px;
+        }
+        .keyboard-key:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 0 #cbd5e1;
+            background: #f8fafc;
+        }
+        .keyboard-key.key-wide {
+            flex: 2.5;
+        }
+        .keyboard-key.key-enter {
+            background: #f59e0b;
+            color: white;
+            border-color: #d97706;
+            box-shadow: 0 4px 0 #b45309;
+            flex: 2;
+            text-transform: uppercase;
+        }
+        .keyboard-key.key-space {
+            flex: 5;
+            text-transform: uppercase;
+        }
+        .keyboard-key.key-special {
+            background: #f1f5f9;
+            color: #64748b;
+        }
+        
+        @media (max-width: 768px) {
+            .keyboard-key {
+                min-width: 30px;
+                padding: 10px 0;
+                font-size: 12px;
+                border-radius: 6px;
+            }
+            .keyboard-container {
+                padding: 12px 0;
+                gap: 5px;
+            }
         }
     </style>
 </head>
@@ -343,7 +439,7 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
                     <!-- Navigation Bar -->
                     <div class="flex flex-row flex-wrap sm:flex-nowrap justify-between items-center mt-8 md:mt-12 gap-4">
                         <?php if ($current_index > 0): ?>
-                            <button type="submit" name="action" value="prev" class="flex-1 sm:flex-none justify-center items-center gap-2 md:gap-3 py-3 md:py-4 px-6 md:px-10 rounded-full font-bold cursor-pointer transition-all duration-300 text-sm md:text-base bg-white/60 backdrop-blur-sm text-slate-700 border border-white/60 shadow-sm hover:bg-white">
+                            <button type="submit" name="action" value="prev" formnovalidate class="flex-1 sm:flex-none justify-center items-center gap-2 md:gap-3 py-3 md:py-4 px-6 md:px-10 rounded-full font-bold cursor-pointer transition-all duration-300 text-sm md:text-base bg-white/60 backdrop-blur-sm text-slate-700 border border-white/60 shadow-sm hover:bg-white">
                                 <i class="fa-solid fa-chevron-left"></i>
                                 KEMBALI
                             </button>
@@ -437,6 +533,9 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
             </button>
         </div>
     </div>
+
+    <!-- Virtual Keyboard -->
+    <div id="virtualKeyboard" class="keyboard-container"></div>
 
     <script src="assets/js/app.js"></script>
 </body>

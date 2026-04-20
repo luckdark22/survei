@@ -39,11 +39,17 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                     <a href="events" class="px-3 py-2 text-sm font-bold transition-colors rounded-lg <?php echo isActive('events', $current_page); ?>">Event</a>
                     <a href="questions" class="px-3 py-2 text-sm font-bold transition-colors rounded-lg <?php echo isActive('questions', $current_page); ?>">Pertanyaan</a>
                     <a href="sessions" class="px-3 py-2 text-sm font-bold transition-colors rounded-lg <?php echo isActive('sessions', $current_page); ?>">Responden</a>
+                    <?php if (isAdmin()): ?>
+                        <a href="users" class="px-3 py-2 text-sm font-bold transition-colors rounded-lg <?php echo isActive('users', $current_page); ?>">User</a>
+                    <?php endif; ?>
                     <a href="settings" class="px-3 py-2 text-sm font-bold transition-colors rounded-lg <?php echo isActive('settings', $current_page); ?>">Pengaturan</a>
                     
                     <div class="h-6 w-px bg-slate-200 mx-2"></div>
                     
-                    <span class="text-xs font-bold text-slate-400 hidden lg:block">Admin: <?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'User'); ?></span>
+                    <span class="text-xs font-bold text-slate-400 hidden lg:block">
+                        <?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'User'); ?> 
+                        <span class="bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full ml-1 text-[10px] uppercase"><?php echo $_SESSION['user_role'] ?? 'staff'; ?></span>
+                    </span>
                     <a href="logout" class="text-sm font-bold text-red-500 hover:text-red-700 transition-colors">
                         <i class="fa-solid fa-arrow-right-from-bracket"></i>
                     </a>
