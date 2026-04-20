@@ -123,17 +123,15 @@ if (isStaff()) {
 
 $filter_event_id = $_GET['event_id'] ?? null;
 if ($filter_event_id) {
-    if (isStaff()) {
-        $where_clauses[] = "q.event_id = ?";
-        $params[] = $filter_event_id;
-    } else {
-        $where_clauses[] = "q.event_id = ?";
-        $params[] = $filter_event_id;
-    }
-} elseif (isStaff()) {
-    // If staff but no specific filter, results are already scoped by the first where_clause
-} else {
-    // Admin with no filter: show ALL including global
+    $where_clauses[] = "q.event_id = ?";
+    $params[] = $filter_event_id;
+}
+
+$search = trim($_GET['search'] ?? '');
+if ($search) {
+    $where_clauses[] = "(q.question LIKE ? OR q.section LIKE ?)";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
 }
 
 $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
@@ -188,30 +186,46 @@ require_once 'includes/header.php';
         <!-- List of Questions -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
             <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
-                <div class="flex flex-col sm:flex-row items-center gap-3 w-full">
+                <div class="flex flex-col lg:flex-row items-center gap-4 w-full">
                     <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 mr-auto">
                         <i class="fa-solid fa-list-check text-amber-500"></i>
                         Daftar Pertanyaan
                     </h2>
                     
-                    <form method="GET" class="w-full sm:w-auto mt-2 sm:mt-0">
-                        <select name="event_id" onchange="this.form.submit()" class="w-full sm:w-auto px-4 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer">
-                            <?php if (isAdmin()): ?>
-                                <option value="">Semua Event (Global)</option>
-                            <?php else: ?>
-                                <option value="">Semua Event Saya</option>
-                            <?php endif; ?>
-                            <?php foreach($events as $ev): ?>
-                                <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
-                                    <?php echo htmlspecialchars($ev['name']); ?>
-                                </option>
-                            <?php endforeach; ?>
-                        </select>
-                    </form>
+                    <div class="flex flex-col md:flex-row items-center gap-3 w-full lg:w-auto">
+                        <!-- Search Box -->
+                        <div style="position: relative; width: 100%; max-width: 256px;" class="w-full md:w-auto">
+                            <form method="GET" class="w-full">
+                                <?php if($filter_event_id): ?><input type="hidden" name="event_id" value="<?php echo htmlspecialchars($filter_event_id); ?>"><?php endif; ?>
+                                <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 11px; pointer-events: none;"></i>
+                                <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Cari pertanyaan..." 
+                                       style="width: 100%; padding: 10px 16px 10px 40px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 12px; font-weight: 500; color: #1e293b; outline: none; transition: all 0.2s;"
+                                       onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 3px rgba(245, 158, 11, 0.1)';"
+                                       onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                            </form>
+                        </div>
 
-                    <button type="button" onclick="openAddModal()" class="w-full sm:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex justify-center items-center gap-2 uppercase tracking-widest mt-2 sm:mt-0">
-                        <i class="fa-solid fa-plus-circle text-sm"></i> Tambah Pertanyaan
-                    </button>
+                        <!-- Event Selector -->
+                        <form method="GET" class="w-full md:w-auto">
+                            <?php if($search): ?><input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>"><?php endif; ?>
+                            <select name="event_id" onchange="this.form.submit()" class="w-full md:w-auto px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer h-[40px]">
+                                <?php if (isAdmin()): ?>
+                                    <option value="">Semua Event (Global)</option>
+                                <?php else: ?>
+                                    <option value="">Semua Event Saya</option>
+                                <?php endif; ?>
+                                <?php foreach($events as $ev): ?>
+                                    <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
+                                        <?php echo htmlspecialchars($ev['name']); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </form>
+                        
+                        <button type="button" onclick="openAddModal()" class="w-full md:w-auto px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-[10px] transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] flex justify-center items-center gap-2 uppercase tracking-widest h-[40px]">
+                            <i class="fa-solid fa-plus-circle text-xs"></i> Tambah
+                        </button>
+                    </div>
                 </div>
             </div>
                 <div class="p-6 overflow-x-auto">
@@ -275,26 +289,32 @@ require_once 'includes/header.php';
                 <!-- Pagination Footer -->
                 <?php if ($total_pages > 1): ?>
                     <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div class="text-xs text-slate-500 font-medium">
-                            Menampilkan <span class="text-slate-800"><?php echo count($questions); ?></span> dari <span class="text-slate-800"><?php echo $total_count; ?></span> pertanyaan
+                        <div class="text-xs text-slate-500 font-medium tracking-wide">
+                            Menampilkan <span class="text-slate-800 font-bold"><?php echo count($questions); ?></span> dari <span class="text-slate-800 font-bold"><?php echo $total_count; ?></span> pertanyaan
                         </div>
                         <div class="flex items-center gap-1">
                             <?php if ($page > 1): ?>
-                                <a href="?page=<?php echo $page - 1; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
-                                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
+                                <a href="?page=<?php echo $page - 1; ?><?php echo $query_str; ?>" 
+                                   style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                    <i class="fa-solid fa-chevron-left"></i>
                                 </a>
                             <?php endif; ?>
 
-                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                                <a href="?page=<?php echo $i; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" 
-                                   class="w-9 h-9 flex items-center justify-center rounded-xl border <?php echo $i === $page ? 'bg-amber-500 border-amber-500 text-white font-black shadow-lg shadow-amber-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'; ?> transition-all text-xs">
+                            <?php 
+                            $start_p = max(1, $page - 2);
+                            $end_p = min($total_pages, $page + 2);
+                            for ($i = $start_p; $i <= $end_p; $i++): 
+                            ?>
+                                <a href="?page=<?php echo $i; ?><?php echo $query_str; ?>" 
+                                   style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid <?php echo $i === $page ? '#f59e0b' : '#e2e8f0'; ?>; background: <?php echo $i === $page ? '#f59e0b' : 'white'; ?>; color: <?php echo $i === $page ? 'white' : '#475569'; ?>; text-decoration: none; transition: all 0.2s; font-size: 13px; font-weight: <?php echo $i === $page ? '900' : '700'; ?>; box-shadow: <?php echo $i === $page ? '0 10px 15px -3px rgba(245, 158, 11, 0.3)' : 'none'; ?>;">
                                     <?php echo $i; ?>
                                 </a>
                             <?php endfor; ?>
 
                             <?php if ($page < $total_pages): ?>
-                                <a href="?page=<?php echo $page + 1; ?><?php echo $filter_event_id ? '&event_id='.$filter_event_id : ''; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
-                                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                                <a href="?page=<?php echo $page + 1; ?><?php echo $query_str; ?>" 
+                                   style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                    <i class="fa-solid fa-chevron-right"></i>
                                 </a>
                             <?php endif; ?>
                         </div>

@@ -84,7 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// Pagination Logic
+// Pagination & Search Logic
+$search = trim($_GET['search'] ?? '');
 $items_per_page = 10;
 $page = isset($_GET['page']) ? (int)$_GET['page'] : 1;
 if ($page < 1) $page = 1;
@@ -99,13 +100,19 @@ if (isStaff()) {
     $query_params[] = getUserId();
 }
 
+if ($search) {
+    $where_clause .= " AND (name LIKE ? OR description LIKE ?)";
+    $query_params[] = "%$search%";
+    $query_params[] = "%$search%";
+}
+
 // Count total events
 $stmt_count = $pdo->prepare("SELECT COUNT(*) FROM events $where_clause");
 $stmt_count->execute($query_params);
 $total_count = $stmt_count->fetchColumn();
 $total_pages = ceil($total_count / $items_per_page);
 
-// Fetch events with pagination
+// Fetch events with pagination and search
 $sql = "SELECT * FROM events $where_clause ORDER BY created_at DESC LIMIT ? OFFSET ?";
 $stmt = $pdo->prepare($sql);
 foreach ($query_params as $i => $val) {
@@ -126,12 +133,23 @@ require_once 'includes/header.php';
         
         <!-- List of Events -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
-            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
-                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-calendar-check text-amber-500"></i> Daftar Acara / Event
-                </h2>
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
+                <div class="flex items-center gap-4 w-full md:w-auto">
+                    <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
+                        <i class="fa-solid fa-calendar-check text-amber-500"></i> Event
+                    </h2>
+                    <div style="position: relative; width: 100%; max-width: 256px;">
+                        <form method="GET">
+                            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 11px; pointer-events: none;"></i>
+                            <input type="text" name="search" value="<?php echo htmlspecialchars($search); ?>" placeholder="Cari nama event..." 
+                                   style="width: 100%; padding: 10px 16px 10px 40px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 12px; font-weight: 500; color: #1e293b; outline: none; transition: all 0.2s;"
+                                   onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 3px rgba(245, 158, 11, 0.1)';"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                        </form>
+                    </div>
+                </div>
                 <button type="button" onclick="openAddModal()" class="px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-black text-xs transition-all shadow-lg shadow-amber-500/20 flex items-center gap-2 uppercase tracking-widest">
-                    <i class="fa-solid fa-plus-circle"></i> Tambah Event Baru
+                    <i class="fa-solid fa-plus-circle text-sm"></i> Tambah Event
                 </button>
             </div>
                 <div class="p-6 overflow-x-auto">
@@ -215,27 +233,40 @@ require_once 'includes/header.php';
                 <?php if ($total_pages > 1): ?>
                     <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <div class="text-xs text-slate-500 font-medium">
-                            Menampilkan <span class="text-slate-800"><?php echo count($events); ?></span> dari <span class="text-slate-800"><?php echo $total_count; ?></span> event
+                            Menampilkan <span class="text-slate-800 font-bold"><?php echo count($events); ?></span> dari <span class="text-slate-800 font-bold"><?php echo $total_count; ?></span> event
                         </div>
-                        <div class="flex items-center gap-1">
-                            <?php if ($page > 1): ?>
-                                <a href="?page=<?php echo $page - 1; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
-                                    <i class="fa-solid fa-chevron-left text-[10px]"></i>
-                                </a>
-                            <?php endif; ?>
+                            <?php 
+                            $page_params = $_GET;
+                            unset($page_params['page']);
+                            $query_str = http_build_query($page_params);
+                            $query_str = $query_str ? '&' . $query_str : '';
+                            ?>
+                            <div class="flex items-center gap-1">
+                                <?php if ($page > 1): ?>
+                                    <a href="?page=<?php echo $page - 1; ?><?php echo $query_str; ?>" 
+                                       style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                        <i class="fa-solid fa-chevron-left"></i>
+                                    </a>
+                                <?php endif; ?>
 
-                            <?php for ($i = 1; $i <= $total_pages; $i++): ?>
-                                <a href="?page=<?php echo $i; ?>" 
-                                   class="w-9 h-9 flex items-center justify-center rounded-xl border <?php echo $i === $page ? 'bg-amber-500 border-amber-500 text-white font-black shadow-lg shadow-amber-500/20' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'; ?> transition-all text-xs">
-                                    <?php echo $i; ?>
-                                </a>
-                            <?php endfor; ?>
+                                <?php 
+                                $start_p = max(1, $page - 2);
+                                $end_p = min($total_pages, $page + 2);
+                                for ($i = $start_p; $i <= $end_p; $i++): 
+                                ?>
+                                    <a href="?page=<?php echo $i; ?><?php echo $query_str; ?>" 
+                                       style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid <?php echo $i === $page ? '#f59e0b' : '#e2e8f0'; ?>; background: <?php echo $i === $page ? '#f59e0b' : 'white'; ?>; color: <?php echo $i === $page ? 'white' : '#475569'; ?>; text-decoration: none; transition: all 0.2s; font-size: 13px; font-weight: <?php echo $i === $page ? '900' : '700'; ?>; box-shadow: <?php echo $i === $page ? '0 10px 15px -3px rgba(245, 158, 11, 0.3)' : 'none'; ?>;">
+                                        <?php echo $i; ?>
+                                    </a>
+                                <?php endfor; ?>
 
-                            <?php if ($page < $total_pages): ?>
-                                <a href="?page=<?php echo $page + 1; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 transition-colors">
-                                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
-                                </a>
-                            <?php endif; ?>
+                                <?php if ($page < $total_pages): ?>
+                                    <a href="?page=<?php echo $page + 1; ?><?php echo $query_str; ?>" 
+                                       style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                        <i class="fa-solid fa-chevron-right"></i>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
                         </div>
                     </div>
                 <?php endif; ?>

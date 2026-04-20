@@ -12,14 +12,14 @@ if ($target_event_id) {
     $actual_id = $unmasked ?: (is_numeric($target_event_id) ? $target_event_id : null);
     
     if ($actual_id) {
-        $stmt = $pdo->prepare("SELECT * FROM events WHERE id = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT * FROM events WHERE id = ? AND is_deleted = 0 LIMIT 1");
         $stmt->execute([$actual_id]);
         $active_event = $stmt->fetch();
     }
 }
 
 if (!isset($active_event) || !$active_event) {
-    $stmt = $pdo->prepare("SELECT * FROM events WHERE is_active = 1 LIMIT 1");
+    $stmt = $pdo->prepare("SELECT * FROM events WHERE is_active = 1 AND is_deleted = 0 LIMIT 1");
     $stmt->execute();
     $active_event = $stmt->fetch();
 }

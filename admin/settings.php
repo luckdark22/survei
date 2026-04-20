@@ -61,13 +61,13 @@ require_once 'includes/header.php';
                 <p class="text-xs text-amber-600 mt-1 font-medium">Nama ini akan muncul di header dan footer seluruh aplikasi.</p>
             </div>
             <div class="p-6">
-                <form method="POST" class="flex flex-col md:flex-row gap-4 items-end">
+                <form method="POST" class="flex flex-col md:flex-row gap-4 md:items-end">
                     <input type="hidden" name="action" value="update_instansi">
                     <div class="flex-1">
                         <label class="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Nama Instansi / Perusahaan</label>
                         <input type="text" name="instansi_name" value="<?php echo htmlspecialchars($settings['instansi_name'] ?? 'Direktorat Inovasi & Layanan'); ?>" class="w-full px-4 py-2 border-2 border-slate-200 rounded-xl text-sm focus:ring-4 focus:ring-amber-400/20 focus:border-amber-400 focus:outline-none transition-all" placeholder="Masukkan nama instansi...">
                     </div>
-                    <button type="submit" class="px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md flex items-center gap-2">
+                    <button type="submit" class="w-full md:w-auto px-6 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2">
                         <i class="fa-solid fa-save"></i> Simpan
                     </button>
                 </form>
@@ -123,8 +123,8 @@ require_once 'includes/header.php';
                         </div>
                     </div>
 
-                    <div class="flex justify-end">
-                        <button type="submit" class="px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] hover:shadow-[0_8px_20px_rgba(245,158,11,0.4)] flex items-center gap-2">
+                    <div class="flex justify-center md:justify-end">
+                        <button type="submit" class="w-full md:w-auto px-8 py-3 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] hover:shadow-[0_8px_20px_rgba(245,158,11,0.4)] flex items-center justify-center gap-2">
                             <i class="fa-solid fa-floppy-disk"></i> Simpan Perubahan
                         </button>
                     </div>

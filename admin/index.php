@@ -9,7 +9,7 @@ $filter_event_id = $_GET['event_id'] ?? '';
 
 // If no event filter is set, default to the active event (that the user owns if staff)
 if (empty($filter_event_id)) {
-    $sql_active = "SELECT id FROM events WHERE is_active = 1";
+    $sql_active = "SELECT id FROM events WHERE is_active = 1 AND is_deleted = 0";
     if (isStaff()) $sql_active .= " AND user_id = " . (int)getUserId();
     $sql_active .= " LIMIT 1";
     
@@ -84,17 +84,44 @@ foreach ($rating_raw as $row) {
     $charts_data[$q_id]['data'][$row['answer_value']] = (int)$row['total'];
 }
 
-// Fetch recent textual feedback
+// Pagination & Search Logic for Feedback (Kotak Saran)
+$fb_search = trim($_GET['fb_search'] ?? '');
+$fb_items_per_page = 10;
+$fb_page = isset($_GET['fb_page']) ? (int)$_GET['fb_page'] : 1;
+if ($fb_page < 1) $fb_page = 1;
+$fb_offset = ($fb_page - 1) * $fb_items_per_page;
+
+$fb_where = " AND (a.answer_value LIKE ? OR a.question_text LIKE ?)";
+$fb_params = array_merge($params, ["%$fb_search%", "%$fb_search%"]);
+
+// Count total textual feedback
+$stmt_fb_count = $pdo->prepare("
+    SELECT COUNT(*) 
+    FROM survey_answers a 
+    JOIN survey_sessions s ON a.session_id = s.id 
+    JOIN questions q ON a.question_id = q.id 
+    WHERE q.type = 'text' AND a.answer_value != '' $answer_where $fb_where
+");
+$stmt_fb_count->execute($fb_params);
+$total_fb_count = $stmt_fb_count->fetchColumn();
+$total_fb_pages = ceil($total_fb_count / $fb_items_per_page);
+
+// Fetch textual feedback with pagination
 $stmt = $pdo->prepare("
     SELECT s.created_at, a.answer_value, a.question_text
     FROM survey_answers a 
     JOIN survey_sessions s ON a.session_id = s.id 
     JOIN questions q ON a.question_id = q.id 
-    WHERE q.type = 'text' AND a.answer_value != '' $answer_where
+    WHERE q.type = 'text' AND a.answer_value != '' $answer_where $fb_where
     ORDER BY s.created_at DESC 
-    LIMIT 50
+    LIMIT ? OFFSET ?
 ");
-$stmt->execute($params);
+foreach ($fb_params as $i => $val) {
+    $stmt->bindValue($i + 1, $val);
+}
+$stmt->bindValue(count($fb_params) + 1, $fb_items_per_page, PDO::PARAM_INT);
+$stmt->bindValue(count($fb_params) + 2, $fb_offset, PDO::PARAM_INT);
+$stmt->execute();
 $feedbacks = $stmt->fetchAll();
 
 // Fetch daily trend data for line chart
@@ -141,18 +168,18 @@ require_once 'includes/header.php';
 
         <!-- Filters & Actions -->
         <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-8 gap-4">
-            <form method="GET" class="flex items-end gap-3 w-full md:w-auto">
-                <div>
+            <form method="GET" class="flex flex-col md:flex-row md:items-end gap-3 w-full md:w-auto">
+                <div class="flex-1 md:flex-none">
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Cari Kapan</label>
-                    <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none" required>
+                    <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none" required>
                 </div>
-                <div class="text-slate-400 font-bold mb-2">-</div>
-                <div>
-                    <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                <div class="hidden md:block text-slate-400 font-bold mb-2">-</div>
+                <div class="flex-1 md:flex-none">
+                    <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
-                <div>
+                <div class="flex-1 md:flex-none">
                     <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter Event</label>
-                    <select name="event_id" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
+                    <select name="event_id" class="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
                         <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Semua Event'; ?></option>
                         <?php foreach($events_list as $ev): ?>
                             <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
@@ -161,12 +188,14 @@ require_once 'includes/header.php';
                         <?php endforeach; ?>
                     </select>
                 </div>
-                <button type="submit" class="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition-colors shadow-sm text-sm">
-                    Filter Data
-                </button>
-                <?php if($start_date): ?>
-                    <a href="./" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg transition-colors text-sm">Reset</a>
-                <?php endif; ?>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 md:flex-none px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold rounded-lg transition-colors shadow-sm text-sm">
+                        Filter Data
+                    </button>
+                    <?php if($start_date): ?>
+                        <a href="./" class="flex-1 md:flex-none text-center px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg transition-colors text-sm">Reset</a>
+                    <?php endif; ?>
+                </div>
             </form>
             
             <a href="export?<?php echo $query_string; ?>" class="w-full md:w-auto text-center px-5 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(16,185,129,0.3)] text-sm flex items-center justify-center gap-2">
@@ -237,10 +266,29 @@ require_once 'includes/header.php';
 
         <!-- Feedback Table -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
-            <div class="px-6 py-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
                 <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                    <i class="fa-solid fa-comments text-amber-500"></i> Kotak Saran & Masukan (<?php echo count($feedbacks); ?> Terbaru)
+                    <i class="fa-solid fa-comments text-amber-500"></i> Kotak Saran & Masukan
                 </h2>
+                <div class="flex items-center gap-3 w-full md:w-auto">
+                    <div style="position: relative; width: 100%; max-width: 256px;">
+                        <form method="GET">
+                            <!-- Keep other filters -->
+                            <?php if($start_date): ?><input type="hidden" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>"><?php endif; ?>
+                            <?php if($end_date): ?><input type="hidden" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>"><?php endif; ?>
+                            <?php if($filter_event_id): ?><input type="hidden" name="event_id" value="<?php echo htmlspecialchars($filter_event_id); ?>"><?php endif; ?>
+                            
+                            <i class="fa-solid fa-magnifying-glass" style="position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: #94a3b8; font-size: 11px; pointer-events: none;"></i>
+                            <input type="text" name="fb_search" value="<?php echo htmlspecialchars($fb_search); ?>" placeholder="Cari isi saran..." 
+                                   style="width: 100%; padding: 10px 16px 10px 40px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; font-size: 12px; font-weight: 500; color: #1e293b; outline: none; transition: all 0.2s;"
+                                   onfocus="this.style.borderColor='#f59e0b'; this.style.boxShadow='0 0 0 3px rgba(245, 158, 11, 0.1)';"
+                                   onblur="this.style.borderColor='#e2e8f0'; this.style.boxShadow='none';">
+                        </form>
+                    </div>
+                    <div class="px-3 py-2 bg-amber-100 text-amber-700 rounded-xl text-[10px] font-black uppercase tracking-widest whitespace-nowrap shadow-sm border border-amber-200">
+                        <?php echo number_format($total_fb_count); ?> SURAT
+                    </div>
+                </div>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
@@ -273,6 +321,42 @@ require_once 'includes/header.php';
                     </tbody>
                 </table>
             </div>
+            
+            <!-- Pagination Footer for Feedback -->
+            <?php if ($total_fb_pages > 1): ?>
+                <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div class="text-xs text-slate-500 font-medium tracking-wide">
+                        Menampilkan <span class="text-slate-900 font-black"><?php echo count($feedbacks); ?></span> dari <span class="text-slate-900 font-black"><?php echo $total_fb_count; ?></span> masukan
+                    </div>
+                    
+                    <div class="flex items-center gap-1">
+                        <?php if ($fb_page > 1): ?>
+                            <a href="?fb_page=<?php echo $fb_page - 1; ?><?php echo $fb_query; ?>" 
+                               style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                <i class="fa-solid fa-chevron-left"></i>
+                            </a>
+                        <?php endif; ?>
+
+                        <?php 
+                        $start_p = max(1, $fb_page - 2);
+                        $end_p = min($total_fb_pages, $fb_page + 2);
+                        for ($i = $start_p; $i <= $end_p; $i++): 
+                        ?>
+                            <a href="?fb_page=<?php echo $i; ?><?php echo $fb_query; ?>" 
+                               style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid <?php echo $i === $fb_page ? '#f59e0b' : '#e2e8f0'; ?>; background: <?php echo $i === $fb_page ? '#f59e0b' : 'white'; ?>; color: <?php echo $i === $fb_page ? 'white' : '#475569'; ?>; text-decoration: none; transition: all 0.2s; font-size: 13px; font-weight: <?php echo $i === $fb_page ? '900' : '700'; ?>; box-shadow: <?php echo $i === $fb_page ? '0 10px 15px -3px rgba(245, 158, 11, 0.3)' : 'none'; ?>;">
+                                <?php echo $i; ?>
+                            </a>
+                        <?php endfor; ?>
+
+                        <?php if ($fb_page < $total_fb_pages): ?>
+                            <a href="?fb_page=<?php echo $fb_page + 1; ?><?php echo $fb_query; ?>" 
+                               style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            <?php endif; ?>
         </div>
 
     </main>

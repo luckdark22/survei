@@ -9,7 +9,7 @@ $filter_event_id = $_GET['event_id'] ?? '';
 
 // If no event filter is set, default to active event (owned by user if staff)
 if (empty($filter_event_id)) {
-    $sql_active = "SELECT id FROM events WHERE is_active = 1";
+    $sql_active = "SELECT id FROM events WHERE is_active = 1 AND is_deleted = 0";
     if (isStaff()) $sql_active .= " AND user_id = " . (int)getUserId();
     $sql_active .= " LIMIT 1";
     
@@ -37,7 +37,7 @@ if ($start_date && $end_date) {
 if ($filter_event_id) {
     if (isStaff()) {
         // Double check ownership
-        $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ?");
+        $check = $pdo->prepare("SELECT id FROM events WHERE id = ? AND user_id = ? AND is_deleted = 0");
         $check->execute([$filter_event_id, getUserId()]);
         if (!$check->fetch()) {
             $_SESSION['error'] = "Akses ditolak.";
@@ -52,6 +52,15 @@ if ($filter_event_id) {
 }
 
 $where_sql = count($where_clauses) > 0 ? "WHERE " . implode(" AND ", $where_clauses) : "";
+
+// MARK AS READ: When admin/staff views the sessions, mark them as read
+try {
+    $update_sql = "UPDATE survey_sessions s SET s.is_read = 1 $where_sql";
+    $update_stmt = $pdo->prepare($update_sql);
+    $update_stmt->execute($params);
+} catch (PDOException $e) {
+    // Silently fail
+}
 
 // Pagination Logic
 $items_per_page = 15;
@@ -201,515 +210,444 @@ $page_icon = "fa-table-list";
 require_once 'includes/header.php';
 ?>
 
-    <main class="max-w-[95%] mx-auto px-4 py-10">
+<style>
+    /* CUSTOM SESSION STYLES - Enterprise Look */
+    .session-container {
+        padding: 40px;
+        background-color: #f8fafc;
+        min-height: 100vh;
+    }
 
-        <!-- Print PDF Header (Hidden on Screen) -->
-        <div class="hidden print-only mb-6 border-b-2 border-slate-800 pb-4">
-            <div style="display:flex; justify-content:space-between; align-items:flex-end;">
-                <div>
-                    <h1 style="font-size: 20pt; font-weight: 900; color: #0f172a; margin: 0; line-height: 1.2;">Laporan Hasil Kepuasan</h1>
-                    <h2 style="font-size: 14pt; font-weight: 900; color: #d97706; margin: 0; text-transform: uppercase; margin-top: 4px;"><?php echo htmlspecialchars($active_event_name); ?></h2>
-                </div>
-                <div style="text-align: right; font-size: 9pt; color: #475569; line-height: 1.5;">
-                    <div><strong>Periode:</strong> <?php echo $periode_text; ?></div>
-                    <div><strong>Total Responden:</strong> <?php echo number_format($total_count); ?> orang</div>
-                    <div><strong>Waktu Cetak:</strong> <?php echo date('d M Y, H:i'); ?></div>
-                </div>
+    /* Filter Bar Styling */
+    .custom-filter-bar {
+        background: #ffffff;
+        padding: 24px;
+        border-radius: 20px;
+        border: 1px solid #e2e8f0;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        margin-bottom: 32px;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-end;
+        gap: 16px;
+    }
+    .filter-group { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 180px; }
+    .filter-label { font-size: 10px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 1.5px; }
+    .filter-input { 
+        height: 42px; 
+        padding: 0 16px; 
+        background: #f8fafc; 
+        border: 1px solid #e2e8f0; 
+        border-radius: 12px; 
+        font-size: 13px; 
+        font-weight: 600; 
+        color: #1e293b;
+        transition: all 0.2s;
+        width: 100%;
+    }
+    .filter-input:focus { border-color: #f59e0b; outline: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1); }
+    .btn-filter { 
+        height: 44px; 
+        padding: 0 24px; 
+        background: #0f172a; 
+        color: white; 
+        font-weight: 800; 
+        font-size: 11px; 
+        text-transform: uppercase; 
+        letter-spacing: 1px;
+        border-radius: 12px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        border: none;
+        cursor: pointer;
+        width: auto;
+    }
+    
+    @media (max-width: 1023px) {
+        .custom-filter-bar { padding: 16px; margin-bottom: 24px; flex-direction: column; align-items: stretch; }
+        .filter-group { width: 100%; flex: none !important; }
+        .btn-filter, .btn-group-responsive { width: 100% !important; justify-content: center; }
+        .btn-group-responsive { display: flex; gap: 12px; }
+        .session-container { padding: 20px; }
+    }
+    
+    .btn-filter:hover { background: #000000; transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+
+    /* Stat Cards */
+    .stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+        gap: 24px;
+        margin-bottom: 40px;
+    }
+    @media (max-width: 640px) {
+        .stat-grid { grid-template-columns: 1fr; }
+    }.custom-stat-card {
+        background: #ffffff;
+        padding: 20px 24px;
+        border-radius: 20px;
+        border: 1px solid #e2e8f0;
+        position: relative;
+        overflow: hidden;
+        transition: all 0.2s;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+    }
+    .custom-stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.05); }
+    .stat-label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; display: block; }
+    .stat-val { font-size: 32px; font-weight: 950; color: #1e293b; line-height: 1; letter-spacing: -1px; }
+    .stat-icon { position: absolute; right: -10px; bottom: -10px; font-size: 72px; color: #f1f5f9; opacity: 0.5; transform: rotate(-15deg); transition: all 0.3s; }
+    .custom-stat-card:hover .stat-icon { color: #f59e0b; opacity: 0.15; transform: rotate(0deg) scale(1.1); }
+
+    /* Data Table Styling */
+    .table-card { background: white; border-radius: 24px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+    .custom-table { width: 100%; border-collapse: collapse; min-width: 1200px; }
+    .custom-table thead th {
+        background: #f8fafc;
+        padding: 20px 24px;
+        text-align: left;
+        font-size: 10px;
+        font-weight: 900;
+        color: #94a3b8;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        border-bottom: 1px solid #e2e8f0;
+        position: sticky;
+        top: 0;
+        z-index: 10;
+    }
+    .custom-table tbody td {
+        padding: 18px 24px;
+        font-size: 13px;
+        font-weight: 600;
+        color: #334155;
+        border-bottom: 1px solid #f1f5f9;
+        transition: background 0.2s;
+    }
+    .custom-table tbody tr:hover td { background: #fdfaf5; }
+    
+    /* Sticky Column Fix */
+    .sticky-col { 
+        position: sticky; 
+        left: 0; 
+        background: white; 
+        z-index: 5;
+        box-shadow: 2px 0 10px rgba(0,0,0,0.03); 
+    }
+    .custom-table thead th.sticky-col { background: #f8fafc; z-index: 11; }
+    
+    .rating-badge { padding: 4px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; text-transform: uppercase; }
+    .rating-high { background: #ecfdf5; color: #059669; }
+    .rating-med { background: #fffbeb; color: #d97706; }
+    .rating-low { background: #fef2f2; color: #dc2626; }
+
+    /* Charts Row */
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 32px; margin-bottom: 48px; }
+    .chart-card { background: white; padding: 24px; border-radius: 24px; border: 1px solid #e2e8f0; }
+    .chart-title { font-size: 13px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
+
+    @media print {
+        .session-container { padding: 0; background: white; }
+        .custom-filter-bar, .btn-filter, aside, header { display: none !important; }
+        .table-card { border: none; box-shadow: none; }
+        .custom-table thead th { background: white !important; color: black !important; border-bottom: 2px solid black !important; }
+    }
+</style>
+
+<div class="session-container">
+    
+    <!-- Filter Bar -->
+    <div class="custom-filter-bar">
+        <form method="GET" class="flex flex-wrap items-end gap-4 w-full">
+            <div class="filter-group">
+                <label class="filter-label">Tanggal Mulai</label>
+                <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="filter-input">
             </div>
-        </div>
-
-        <!-- Filters & Actions -->
-        <div class="flex flex-col md:flex-row justify-between items-center bg-white p-4 rounded-xl border border-slate-100 shadow-sm mb-6 gap-4 print-hidden">
-            <form method="GET" class="flex items-end gap-3 w-full md:w-auto">
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Mulai</label>
-                    <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
-                </div>
-                <div class="text-slate-400 font-bold mb-2">s/d</div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Hingga</label>
-                    <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
-                </div>
-                <div>
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter Event</label>
-                    <select name="event_id" class="px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white">
-                        <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Semua Event'; ?></option>
-                        <?php foreach($events_list as $ev): ?>
-                            <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($ev['name']); ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <button type="submit" class="px-5 py-2 bg-amber-500 hover:bg-amber-600 text-white font-black rounded-lg transition-all shadow-[0_4px_14px_rgba(245,158,11,0.3)] text-sm">
-                    FILTER DATA
-                </button>
-                <?php if($start_date || $end_date): ?>
-                    <a href="sessions" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold rounded-lg transition-colors text-sm">RESET</a>
-                <?php endif; ?>
-            </form>
-            <div class="flex items-center gap-2 w-full md:w-auto">
-                <a href="export?<?php echo $query_string; ?>" class="flex-1 text-center px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(16,185,129,0.3)] text-xs md:text-sm flex items-center justify-center gap-2">
-                    <i class="fa-solid fa-file-csv text-base"></i> <span class="hidden md:inline">Ekspor CSV</span>
+            <div class="filter-group">
+                <label class="filter-label">Tanggal Akhir</label>
+                <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="filter-input">
+            </div>
+            <div class="filter-group" style="flex: 1.5;">
+                <label class="filter-label">Berdasarkan Event</label>
+                <select name="event_id" class="filter-input">
+                    <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Seluruh Event'; ?></option>
+                    <?php foreach($events_list as $ev): ?>
+                        <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($ev['name']); ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <button type="submit" class="btn-filter">
+                <i class="fa-solid fa-filter"></i> Tampilkan Data
+            </button>
+            <div class="btn-group-responsive flex gap-2">
+                <a href="export?<?php echo $query_string; ?>" class="btn-filter flex-1" style="background: #10b981;">
+                    <i class="fa-solid fa-file-excel"></i> <span class="lg:hidden">Excel</span>
                 </a>
-                <button onclick="window.print()" style="background:#f43f5e; color:#ffffff;" class="flex-1 text-center px-4 py-2.5 font-bold rounded-xl transition-colors shadow-[0_4px_14px_rgba(244,63,94,0.3)] text-xs md:text-sm flex items-center justify-center gap-2" title="Cetak / Simpan PDF">
-                    <i class="fa-solid fa-file-pdf text-base"></i> <span class="hidden md:inline">Ekspor PDF</span>
+                <button type="button" onclick="window.print()" class="btn-filter flex-1" style="background: #f43f5e;">
+                    <i class="fa-solid fa-file-pdf"></i> <span class="lg:hidden">PDF</span>
                 </button>
             </div>
-        </div>
+        </form>
+    </div>
 
-        <!-- Row 1: Key Stats Summary -->
-        <div class="mb-6">
-            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm flex flex-col justify-center max-w-[280px]">
-                <span class="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Total Responden</span>
-                <div class="text-5xl font-black text-slate-800"><?php echo number_format($total_count); ?></div>
-                <div class="mt-2 text-[10px] text-emerald-500 font-bold uppercase tracking-tight flex items-center gap-1">
-                    <i class="fa-solid fa-arrow-up"></i> Terkumpul dari sistem
-                </div>
+    <!-- Stats Cards -->
+    <div class="stat-grid">
+        <div class="custom-stat-card" style="border-left: 4px solid #f59e0b;">
+            <i class="fa-solid fa-users stat-icon"></i>
+            <span class="stat-label">Total Responden</span>
+            <div class="stat-val"><?php echo number_format($total_count); ?></div>
+        </div>
+        <div class="custom-stat-card" style="border-left: 4px solid #10b981;">
+            <i class="fa-solid fa-chart-line stat-icon"></i>
+            <span class="stat-label">IKM Rata-Rata</span>
+            <div class="stat-val" style="color: #10b981;">
+                <?php 
+                    $total_avg = 0;
+                    if(count($avg_data) > 0) {
+                        foreach($avg_data as $ad) $total_avg += $ad['average'];
+                        echo number_format($total_avg / count($avg_data), 2);
+                    } else echo "0.00";
+                ?>
             </div>
         </div>
+    </div>
 
-        <!-- Row 2: Charts Side-by-Side -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10 print-chart-row">
-            <!-- Global Distribution Chart -->
-            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm print-col">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <i class="fa-solid fa-chart-simple text-amber-500"></i> Distribusi Kepuasan
-                    </h3>
-                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Global</span>
-                </div>
-                <div class="h-64">
-                    <canvas id="satisfactionChart"></canvas>
-                </div>
-            </div>
-
-            <!-- Trend per Pertanyaan Chart -->
-            <div class="bg-white p-6 rounded-2xl border border-slate-100 shadow-sm print-col">
-                <div class="flex justify-between items-center mb-6">
-                    <h3 class="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                        <i class="fa-solid fa-chart-line text-emerald-500"></i> Trend per Pertanyaan
-                    </h3>
-                    <span class="text-[10px] text-slate-400 font-bold uppercase italic">Skala 1.0 - 4.0</span>
-                </div>
-                <div class="w-full overflow-y-auto" style="max-height: 400px; min-height: <?php echo min(400, count($avg_data) * 60 + 50); ?>px;">
-                    <canvas id="averageScoreChart"></canvas>
-                </div>
+    <!-- Charts Row -->
+    <div class="charts-grid">
+        <div class="chart-card">
+            <h3 class="chart-title"><i class="fa-solid fa-chart-pie text-amber-500"></i> Distribusi Kepuasan</h3>
+            <div style="height: 300px;">
+                <canvas id="satisfactionChart"></canvas>
             </div>
         </div>
+        <div class="chart-card">
+            <h3 class="chart-title"><i class="fa-solid fa-chart-bar text-emerald-500"></i> Performa per Pertanyaan</h3>
+            <div style="height: 350px; overflow-y: auto;" class="custom-scrollbar">
+                <canvas id="averageScoreChart"></canvas>
+            </div>
+        </div>
+    </div>
 
-
-        <!-- Data Table (Screen Only) -->
-        <div class="screen-only bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-8">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse min-w-[1200px]">
-                    <thead>
-                        <tr class="bg-slate-50 text-slate-500 text-xs tracking-wider">
-                            <th class="sticky left-0 bg-slate-50 px-4 py-4 font-black border-b border-slate-200 z-10 w-[120px]">KODE SESI</th>
-                            <th class="px-4 py-4 font-black border-b border-slate-200">EVENT</th>
-                            <th class="px-4 py-4 font-black border-b border-slate-200 min-w-[150px]">WAKTU PENGISIAN</th>
-                            <?php foreach($unique_qs as $key => $title): ?>
-                                <th class="px-4 py-4 font-black border-b border-slate-200 min-w-[220px] align-bottom">
-                                    <span class="block text-amber-600 text-[9px] uppercase mb-1 tracking-widest font-black">Pertanyaan</span>
-                                    <span class="line-clamp-2 leading-tight uppercase font-black text-[11px]" title="<?php echo htmlspecialchars($title); ?>"><?php echo htmlspecialchars($title); ?></span>
-                                </th>
-                            <?php endforeach; ?>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100 text-sm">
-                        <?php if (count($sessions) > 0): ?>
-                            <?php foreach($sessions as $sid => $sess): ?>
-                                <tr class="hover:bg-amber-50/20 transition-colors group">
-                                    <td class="sticky left-0 bg-white group-hover:bg-amber-50/20 px-4 py-4 font-black text-slate-800 shadow-[2px_0_5px_-2px_rgba(0,0,0,0.05)]">
-                                        #<?php echo str_pad($sid, 5, '0', STR_PAD_LEFT); ?>
-                                    </td>
-                                    <td class="px-4 py-4">
-                                        <span class="px-2 py-1 bg-slate-100 text-slate-500 rounded text-[10px] font-black uppercase tracking-widest"><?php echo htmlspecialchars($sess['event']); ?></span>
-                                    </td>
-                                    <td class="px-4 py-4 text-slate-500 font-medium">
-                                        <?php echo date('d M Y, H:i', strtotime($sess['time'])); ?>
-                                    </td>
-                                    <?php foreach($unique_qs as $key => $title): ?>
-                                        <td class="px-4 py-4 text-slate-700">
-                                            <?php 
-                                            $ans = isset($sess['answers'][$key]) ? $sess['answers'][$key] : '-';
-                                            if ($ans === 'SANGAT PUAS' || $ans === 'PUAS') {
-                                                echo '<span class="text-emerald-600 font-bold"><i class="fa-solid fa-face-smile text-emerald-500 mr-1"></i> ' . $ans . '</span>';
-                                            } elseif ($ans === 'CUKUP PUAS') {
-                                                echo '<span class="text-amber-600 font-bold"><i class="fa-solid fa-face-meh text-amber-500 mr-1"></i> ' . $ans . '</span>';
-                                            } elseif ($ans === 'TIDAK PUAS') {
-                                                echo '<span class="text-red-600 font-bold"><i class="fa-solid fa-face-frown text-red-500 mr-1"></i> ' . $ans . '</span>';
-                                            } else {
-                                                echo '<div class="line-clamp-3 text-slate-600 italic" title="' . htmlspecialchars($ans) . '">' . htmlspecialchars($ans) . '</div>';
-                                            }
-                                            ?>
-                                        </td>
-                                    <?php endforeach; ?>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php else: ?>
+    <!-- Data Table Card -->
+    <div class="table-card">
+        <div class="overflow-x-auto custom-scrollbar">
+            <table class="custom-table">
+                <thead>
+                    <tr>
+                        <th class="sticky-col">KODE SESI</th>
+                        <th>NAMA EVENT</th>
+                        <th>WAKTU PENGISIAN</th>
+                        <?php foreach($unique_qs as $key => $title): ?>
+                            <th style="min-width: 250px;">
+                                <?php echo htmlspecialchars($title); ?>
+                            </th>
+                        <?php endforeach; ?>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if (count($sessions) > 0): ?>
+                        <?php foreach($sessions as $sid => $sess): ?>
                             <tr>
-                                <td colspan="<?php echo count($unique_qs) + 2; ?>" class="px-6 py-12 text-center text-slate-400 font-medium text-lg">
-                                    <i class="fa-solid fa-folder-open text-4xl mb-3 block text-slate-300"></i>
-                                    Tidak ada data untuk rentang waktu yang dipilih.
-                                </td>
-                            </tr>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- Data List: Cards Flow (PDF Only) -->
-        <div class="pdf-only space-y-6">
-            <?php if (count($sessions) > 0): ?>
-                <?php foreach($sessions as $sid => $sess): ?>
-                    <!-- Session Card -->
-                    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden print-session-card">
-                        <!-- Session Header -->
-                        <div class="bg-slate-50 border-b border-slate-100 flex flex-col md:flex-row justify-between items-start md:items-center p-5 gap-4">
-                            <div class="flex items-center gap-4">
-                                <div class="w-12 h-12 rounded-xl bg-amber-100 flex justify-center items-center text-amber-600 shadow-inner">
-                                    <i class="fa-solid fa-user-check text-xl"></i>
-                                </div>
-                                <div>
-                                    <div class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-0.5">Kode Sesi</div>
-                                    <div class="text-xl font-black text-slate-800">#<?php echo str_pad($sid, 5, '0', STR_PAD_LEFT); ?></div>
-                                </div>
-                            </div>
-                            <div class="flex flex-col md:items-end gap-2 text-left md:text-right">
-                                <div class="px-3 py-1 bg-amber-50 rounded-lg border border-amber-100 text-amber-600 text-xs font-bold uppercase tracking-widest flex items-center gap-2">
-                                    <i class="fa-solid fa-tag"></i> <?php echo htmlspecialchars($sess['event']); ?>
-                                </div>
-                                <div class="text-xs font-bold text-slate-500">
-                                    <i class="fa-regular fa-clock"></i> <?php echo date('d M Y, H:i', strtotime($sess['time'])); ?>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Questions & Answers Wrapper -->
-                        <div class="p-6 bg-white">
-                            <div class="print-qa-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem;">
+                                <td class="sticky-col font-black" style="color: #f59e0b;">#<?php echo str_pad($sid, 5, '0', STR_PAD_LEFT); ?></td>
+                                <td><?php echo htmlspecialchars($sess['event']); ?></td>
+                                <td style="color: #94a3b8;"><?php echo date('d M Y, H:i', strtotime($sess['time'])); ?></td>
                                 <?php foreach($unique_qs as $key => $title): ?>
-                                    <!-- Inner QA Card -->
-                                    <div class="bg-slate-50/50 rounded-xl p-4 border border-slate-100 flex flex-col justify-between hover:border-amber-200 hover:shadow-md transition-all group print-qa-card" style="page-break-inside: avoid;">
-                                        <div class="text-[11px] text-slate-600 font-bold mb-3 uppercase tracking-wide leading-relaxed group-hover:text-amber-700 transition-colors">
-                                            <span class="text-amber-500 font-black mr-1">Q.</span> <?php echo htmlspecialchars($title); ?>
-                                        </div>
-                                        <div class="text-sm border-t border-slate-100 pt-3 mt-auto font-black text-slate-900">
-                                            <?php 
-                                            $ans = isset($sess['answers'][$key]) ? $sess['answers'][$key] : '-';
-                                            if ($ans === 'SANGAT PUAS' || $ans === 'PUAS') {
-                                                echo '<span class="text-emerald-600 flex items-center gap-2"><i class="fa-solid fa-face-smile text-emerald-500 text-lg"></i> ' . $ans . '</span>';
-                                            } elseif ($ans === 'CUKUP PUAS') {
-                                                echo '<span class="text-amber-600 flex items-center gap-2"><i class="fa-solid fa-face-meh text-amber-500 text-lg"></i> ' . $ans . '</span>';
-                                            } elseif ($ans === 'TIDAK PUAS') {
-                                                echo '<span class="text-rose-600 flex items-center gap-2"><i class="fa-solid fa-face-frown text-rose-500 text-lg"></i> ' . $ans . '</span>';
-                                            } else {
-                                                echo '<div class="italic text-slate-700 font-medium line-clamp-5 leading-relaxed">' . htmlspecialchars($ans) . '</div>';
-                                            }
-                                            ?>
-                                        </div>
-                                    </div>
+                                    <td>
+                                        <?php 
+                                        $ans = isset($sess['answers'][$key]) ? $sess['answers'][$key] : '-';
+                                        if ($ans === 'SANGAT PUAS' || $ans === 'PUAS') {
+                                            echo '<span class="rating-badge rating-high"><i class="fa-solid fa-face-smile"></i> ' . $ans . '</span>';
+                                        } elseif ($ans === 'CUKUP PUAS') {
+                                            echo '<span class="rating-badge rating-med"><i class="fa-solid fa-face-meh"></i> ' . $ans . '</span>';
+                                        } elseif ($ans === 'TIDAK PUAS') {
+                                            echo '<span class="rating-badge rating-low"><i class="fa-solid fa-face-frown"></i> ' . $ans . '</span>';
+                                        } else {
+                                            echo htmlspecialchars($ans);
+                                        }
+                                        ?>
+                                    </td>
                                 <?php endforeach; ?>
-                            </div>
-                        </div>
-                    </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="bg-white rounded-2xl border border-slate-100 p-12 flex flex-col items-center justify-center text-center">
-                    <i class="fa-solid fa-folder-open text-5xl mb-4 text-slate-300"></i>
-                    <h3 class="text-lg font-bold text-slate-500 mb-1">Data Kosong</h3>
-                    <p class="text-slate-400 text-sm">Tidak ada respons untuk dirender pada periode filter ini.</p>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php else: ?>
+                        <tr><td colspan="100" style="text-align:center; padding: 100px 0; color: #94a3b8;">Tidak ada data ditemukan.</td></tr>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination UI -->
+        <div style="padding: 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+            <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase;">
+                Menampilkan <?php echo count($sessions); ?> dari <?php echo $total_count; ?> entries
+            </div>
+            <?php if ($total_pages > 1): ?>
+                <div style="display: flex; gap: 8px;">
+                    <?php for ($i = 1; $i <= $total_pages; $i++): ?>
+                        <a href="?page=<?php echo $i; ?>&<?php echo $query_string; ?>" 
+                           style="width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-decoration: none; transition: all 0.2s; <?php echo $i === $page ? 'background: #f59e0b; color: white;' : 'background: white; color: #64748b; border: 1px solid #e2e8f0;'; ?>">
+                            <?php echo $i; ?>
+                        </a>
+                    <?php endfor; ?>
                 </div>
             <?php endif; ?>
-        </div>
-            <div class="px-6 py-4 bg-slate-50 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div class="text-xs text-slate-500 font-medium tracking-wide">
-                    Menampilkan <span class="text-slate-900 font-black"><?php echo count($sessions); ?></span> dari <span class="text-slate-900 font-black"><?php echo $total_count; ?></span> responden
-                </div>
+    </div>
 
-                <!-- Pagination Nav -->
-                <?php if ($total_pages > 1): ?>
-                    <div class="flex items-center gap-1">
-                        <?php 
-                        $filter_params = $_GET;
-                        unset($filter_params['page']);
-                        $base_params = http_build_query($filter_params);
-                        $base_params = $base_params ? '&' . $base_params : '';
-                        ?>
+</div>
 
-                        <?php if ($page > 1): ?>
-                            <a href="?page=<?php echo $page - 1; ?><?php echo $base_params; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all">
-                                <i class="fa-solid fa-chevron-left text-[10px]"></i>
-                            </a>
-                        <?php endif; ?>
-
-                        <?php 
-                        $start_p = max(1, $page - 2);
-                        $end_p = min($total_pages, $page + 2);
-                        for ($i = $start_p; $i <= $end_p; $i++): 
-                        ?>
-                            <a href="?page=<?php echo $i; ?><?php echo $base_params; ?>" 
-                               class="w-9 h-9 flex items-center justify-center rounded-xl border <?php echo $i === $page ? 'bg-amber-500 border-amber-500 text-white font-black shadow-lg shadow-amber-500/30' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50 hover:border-slate-300'; ?> transition-all text-xs">
-                                <?php echo $i; ?>
-                            </a>
-                        <?php endfor; ?>
-
-                        <?php if ($page < $total_pages): ?>
-                            <a href="?page=<?php echo $page + 1; ?><?php echo $base_params; ?>" class="w-9 h-9 flex items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-amber-50 hover:text-amber-600 hover:border-amber-200 transition-all">
-                                <i class="fa-solid fa-chevron-right text-[10px]"></i>
-                            </a>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-            </div>
-        </div>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const ctx = document.getElementById('satisfactionChart').getContext('2d');
-            
-            new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['SANGAT PUAS', 'PUAS', 'CUKUP PUAS', 'TIDAK PUAS'],
-                    datasets: [{
-                        label: 'Jumlah Respon',
-                        data: [
-                            <?php echo $chart_data['SANGAT_PUAS']; ?>,
-                            <?php echo $chart_data['PUAS']; ?>,
-                            <?php echo $chart_data['CUKUP_PUAS']; ?>,
-                            <?php echo $chart_data['TIDAK_PUAS']; ?>
-                        ],
-                        backgroundColor: [
-                            'rgba(16, 185, 129, 0.8)', // Emerald 500
-                            'rgba(34, 197, 94, 0.8)',  // Green 500
-                            'rgba(245, 158, 11, 0.8)', // Amber 500
-                            'rgba(239, 68, 68, 0.8)'   // Red 500
-                        ],
-                        borderRadius: 12,
-                        barThickness: 40
-                    }]
-                },
-                plugins: [{
-                    id: 'datalabels',
-                    afterDatasetsDraw(chart) {
-                        const { ctx, data } = chart;
-                        ctx.save();
-                        chart.data.datasets.forEach((dataset, i) => {
-                            chart.getDatasetMeta(i).data.forEach((bar, index) => {
-                                const val = dataset.data[index];
-                                if (val > 0) {
-                                    ctx.fillStyle = '#334155'; // Slate 700
-                                    ctx.font = 'bold 12px Inter, sans-serif';
-                                    ctx.textAlign = 'center';
-                                    ctx.textBaseline = 'bottom';
-                                    ctx.fillText(val, bar.x, bar.y - 8);
-                                }
-                            });
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const ctx = document.getElementById('satisfactionChart').getContext('2d');
+        
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['SANGAT PUAS', 'PUAS', 'CUKUP PUAS', 'TIDAK PUAS'],
+                datasets: [{
+                    label: 'Jumlah Respon',
+                    data: [
+                        <?php echo $chart_data['SANGAT_PUAS']; ?>,
+                        <?php echo $chart_data['PUAS']; ?>,
+                        <?php echo $chart_data['CUKUP_PUAS']; ?>,
+                        <?php echo $chart_data['TIDAK_PUAS']; ?>
+                    ],
+                    backgroundColor: [
+                        'rgba(16, 185, 129, 0.8)', // Emerald 500
+                        'rgba(34, 197, 94, 0.8)',  // Green 500
+                        'rgba(245, 158, 11, 0.8)', // Amber 500
+                        'rgba(239, 68, 68, 0.8)'   // Red 500
+                    ],
+                    borderRadius: 12,
+                    barThickness: 40
+                }]
+            },
+            plugins: [{
+                id: 'datalabels',
+                afterDatasetsDraw(chart) {
+                    const { ctx, data } = chart;
+                    ctx.save();
+                    chart.data.datasets.forEach((dataset, i) => {
+                        chart.getDatasetMeta(i).data.forEach((bar, index) => {
+                            const val = dataset.data[index];
+                            if (val > 0) {
+                                ctx.fillStyle = '#334155'; // Slate 700
+                                ctx.font = 'bold 12px Inter, sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'bottom';
+                                ctx.fillText(val, bar.x, bar.y - 8);
+                            }
                         });
-                        ctx.restore();
-                    }
-                }],
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            grace: '15%',
-                            grid: {
-                                display: true,
-                                color: 'rgba(0,0,0,0.03)'
-                            },
-                            ticks: {
-                                stepSize: 1,
-                                font: { size: 10, weight: 'bold' }
-                            }
+                    });
+                    ctx.restore();
+                }
+            }],
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grace: '15%',
+                        grid: {
+                            display: true,
+                            color: 'rgba(0,0,0,0.03)'
                         },
-                        x: {
-                            grid: { display: false },
-                            ticks: {
-                                font: { size: 9, weight: 'bold' }
-                            }
+                        ticks: {
+                            stepSize: 1,
+                            font: { size: 10, weight: 'bold' }
+                        }
+                    },
+                    x: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { size: 9, weight: 'bold' }
                         }
                     }
                 }
-            });
+            }
+        });
 
-            // NEW: Average Score Chart (Horizontal Bar)
-            const avgCtx = document.getElementById('averageScoreChart').getContext('2d');
-            new Chart(avgCtx, {
-                type: 'bar',
-                data: {
-                    labels: [
+        const avgCtx = document.getElementById('averageScoreChart').getContext('2d');
+        new Chart(avgCtx, {
+            type: 'bar',
+            data: {
+                labels: [
+                    <?php foreach($avg_data as $ad): ?>
+                        "<?php echo addslashes($ad['question']); ?>",
+                    <?php endforeach; ?>
+                ],
+                datasets: [{
+                    label: 'Skala Kepuasan',
+                    data: [
                         <?php foreach($avg_data as $ad): ?>
-                            "<?php echo addslashes($ad['question']); ?>",
+                            <?php echo number_format($ad['average'], 2); ?>,
                         <?php endforeach; ?>
                     ],
-                    datasets: [{
-                        label: 'Skala Kepuasan',
-                        data: [
-                            <?php foreach($avg_data as $ad): ?>
-                                <?php echo number_format($ad['average'], 2); ?>,
-                            <?php endforeach; ?>
-                        ],
-                        backgroundColor: function(context) {
-                            const val = context.dataset.data[context.dataIndex];
-                            if (val >= 3.5) return 'rgba(16, 185, 129, 0.8)'; // Emerald
-                            if (val >= 3.0) return 'rgba(34, 197, 94, 0.8)';  // Green
-                            if (val >= 2.5) return 'rgba(234, 179, 8, 0.8)';  // Yellow
-                            return 'rgba(239, 68, 68, 0.8)'; // Red
-                        },
-                        borderRadius: 8,
-                        barThickness: 25
-                    }]
-                },
-                plugins: [{
-                    id: 'avgLabels',
-                    afterDatasetsDraw(chart) {
-                        const { ctx } = chart;
-                        ctx.save();
-                        chart.data.datasets.forEach((dataset, i) => {
-                            chart.getDatasetMeta(i).data.forEach((bar, index) => {
-                                const val = dataset.data[index];
-                                ctx.fillStyle = '#1e293b';
-                                ctx.font = 'bold 11px Inter, sans-serif';
-                                ctx.textAlign = 'left';
-                                ctx.textBaseline = 'middle';
-                                ctx.fillText(val, bar.x + 8, bar.y);
-                            });
-                        });
-                        ctx.restore();
-                    }
-                }],
-                options: {
-                    indexAxis: 'y',
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { display: false }
+                    backgroundColor: function(context) {
+                        const val = context.dataset.data[context.dataIndex];
+                        if (val >= 3.5) return 'rgba(16, 185, 129, 0.8)'; // Emerald
+                        if (val >= 3.0) return 'rgba(34, 197, 94, 0.8)';  // Green
+                        if (val >= 2.5) return 'rgba(234, 179, 8, 0.8)';  // Yellow
+                        return 'rgba(239, 68, 68, 0.8)'; // Red
                     },
-                    scales: {
-                        x: {
-                            beginAtZero: false,
-                            min: 1,
-                            max: 4.5, // room for labels
-                            grid: { color: 'rgba(0,0,0,0.03)' },
-                            ticks: { font: { weight: 'bold' } }
-                        },
-                        y: {
-                            grid: { display: false },
-                            ticks: {
-                                font: { size: 10, weight: 'bold' },
-                                callback: function(value) {
-                                    const label = this.getLabelForValue(value);
-                                    return label.length > 50 ? label.substr(0, 47) + '...' : label;
-                                }
+                    borderRadius: 8,
+                    barThickness: 25
+                }]
+            },
+            plugins: [{
+                id: 'avgLabels',
+                afterDatasetsDraw(chart) {
+                    const { ctx } = chart;
+                    ctx.save();
+                    chart.data.datasets.forEach((dataset, i) => {
+                        chart.getDatasetMeta(i).data.forEach((bar, index) => {
+                            const val = dataset.data[index];
+                            ctx.fillStyle = '#1e293b';
+                            ctx.font = 'bold 11px Inter, sans-serif';
+                            ctx.textAlign = 'left';
+                            ctx.textBaseline = 'middle';
+                            ctx.fillText(val, bar.x + 8, bar.y);
+                        });
+                    });
+                    ctx.restore();
+                }
+            }],
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: false,
+                        min: 1,
+                        max: 4.5, // room for labels
+                        grid: { color: 'rgba(0,0,0,0.03)' },
+                        ticks: { font: { weight: 'bold' } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: {
+                            font: { size: 10, weight: 'bold' },
+                            callback: function(value) {
+                                const label = this.getLabelForValue(value);
+                                return label.length > 50 ? label.substr(0, 47) + '...' : label;
                             }
                         }
                     }
                 }
-            });
+            }
         });
-    </script>
-    <style>
-        .screen-only { display: block; }
-        .pdf-only { display: none; }
-        
-        /* Print Stylesheet for Export PDF */
-        @media print {
-            .screen-only { display: none !important; }
-            .pdf-only { display: block !important; }
-
-            /* Show print-only elements */
-            .hidden.print-only, .print-only { display: block !important; }
-            
-            /* Hide unnecessary UI elements */
-            aside, header, nav, form, .pagination-container, .print-hidden, button[title="Cetak / Simpan PDF"], a[href^="export"] {
-                display: none !important;
-            }
-            
-            /* Expand the main container to fill the page */
-            main.max-w-\\[95\\%\\] {
-                max-width: 100% !important;
-                padding: 0 !important;
-                margin: 0 !important;
-            }
-            
-            body {
-                background-color: white !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-            }
-
-            /* Page Print Settings */
-            @page {
-                size: portrait; /* switch back to portrait since cards adapt well */
-                margin: 10mm;
-            }
-
-            /* Adjust chart visibility and page breaks */
-            .print-chart-row { display: grid !important; grid-template-columns: 1fr 1fr !important; gap: 20px !important; margin-bottom: 2rem !important; }
-            .print-chart-grid, .print-col { 
-                margin-bottom: 0 !important; 
-                page-break-inside: avoid !important;
-                border: 2px solid #e2e8f0 !important; 
-                background-color: #ffffff !important;
-                padding: 15px !important;
-                border-radius: 12px !important;
-                display: block !important;
-            }
-            .lg\\:col-span-2 { width: 100% !important; margin-top: 0 !important; }
-
-            /* Fix nested chart height in PDF horizontal mode */
-            .print-col .h-64 { height: 250px !important; }
-            .print-col div[style*="max-height"] { max-height: none !important; height: auto !important; }
-            
-            /* Typography refinement for Print */
-            h3.text-sm { font-size: 14px !important; border-bottom: 1px solid #f1f5f9; padding-bottom: 10px; margin-bottom: 15px !important; }
-            .text-5xl { font-size: 32px !important; color: #0f172a !important; }
-            
-            /* Chart Canvas Fix for Bleeding */
-            .h-48, .h-48 canvas { max-height: 250px !important; }
-            canvas { max-width: 100% !important; width: 100% !important; height: auto !important; }
-            
-            /* Card and Grid formatting */
-            .space-y-6 > :not([hidden]) ~ :not([hidden]) { margin-top: 15px !important; }
-            .print-session-card { 
-                border: 2px solid #cbd5e1 !important; 
-                margin-bottom: 15px !important; 
-                box-shadow: none !important; 
-                background-color: #ffffff !important;
-            }
-            .print-qa-grid { display: block !important; }
-            .print-qa-card { 
-                display: block !important; 
-                width: 100% !important; 
-                margin-bottom: 10px !important; 
-                border: 1px solid #e2e8f0 !important; 
-                break-inside: avoid; 
-                page-break-inside: avoid;
-                background-color: #f8fafc !important;
-            }
-            
-            /* Background colors */
-            .bg-emerald-50, .bg-amber-50, .bg-slate-50, .bg-white {
-                background-color: #ffffff !important; 
-                -webkit-print-color-adjust: exact !important;
-            }
-            .text-emerald-500, .text-emerald-600 { color: #10b981 !important; }
-            .text-amber-500, .text-amber-600 { color: #d97706 !important; }
-            .text-rose-500, .text-rose-600, .text-red-500 { color: #e11d48 !important; }
-            
-            /* Remove shadows */
-            .shadow-sm, .shadow-inner, .shadow-\\[.*\\] { box-shadow: none !important; }
-        }
-    </style>
-    <?php require_once 'includes/footer.php'; ?>
+    });
+</script>
+<?php require_once 'includes/footer.php'; ?>
