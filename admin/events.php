@@ -15,6 +15,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $stmt = $pdo->prepare("INSERT INTO events (name, description, expires_at, is_active, user_id) VALUES (?, ?, ?, 0, ?)");
             $stmt->execute([$name, $description, $expires_at, $user_id]);
+            
+            logActivity($pdo, 'CREATE_EVENT', "Created event: $name");
+            
             $_SESSION['success'] = "Event '$name' berhasil ditambahkan!";
             
         } elseif ($_POST['action'] === 'activate') {
@@ -40,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Activate selected
             $stmt = $pdo->prepare("UPDATE events SET is_active = 1 WHERE id = ?");
             $stmt->execute([$id]);
+            
+            logActivity($pdo, 'ACTIVATE_EVENT', "Activated event ID: $id");
+            
             $_SESSION['success'] = "Event berhasil diaktifkan!";
         } elseif ($_POST['action'] === 'delete') {
             $id = $_POST['id'];
@@ -57,6 +63,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Soft delete event
             $stmt = $pdo->prepare("UPDATE events SET is_deleted = 1 WHERE id = ?");
             $stmt->execute([$id]);
+            
+            logActivity($pdo, 'DELETE_EVENT', "Deleted event ID: $id");
+            
             $_SESSION['success'] = "Event berhasil dihapus!";
         } elseif ($_POST['action'] === 'edit') {
             $id = $_POST['id'];
@@ -76,6 +85,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             $stmt = $pdo->prepare("UPDATE events SET name = ?, description = ?, expires_at = ? WHERE id = ?");
             $stmt->execute([$name, $description, $expires_at, $id]);
+            
+            logActivity($pdo, 'UPDATE_EVENT', "Updated event: $name (ID: $id)");
+            
             $_SESSION['success'] = "Event '$name' berhasil diperbarui!";
         }
         
@@ -133,7 +145,7 @@ require_once 'includes/header.php';
         
         <!-- List of Events -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
-            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-slate-50/50 gap-4">
                 <div class="flex items-center gap-4 w-full md:w-auto">
                     <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
                         <i class="fa-solid fa-calendar-check text-amber-500"></i> Event
@@ -153,7 +165,7 @@ require_once 'includes/header.php';
                 </button>
             </div>
                 <div class="p-6 overflow-x-auto">
-                    <table class="w-full text-left border-collapse min-w-[600px]">
+                    <table class="w-full text-left border-collapse min-w-[560px]">
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                                 <th class="px-4 py-3 font-bold border-b border-slate-200">Nama Event</th>
@@ -199,12 +211,15 @@ require_once 'includes/header.php';
                                         <?php endif; ?>
                                     </td>
                                     <td class="px-4 py-4 text-right">
-                                        <div class="flex justify-end gap-2 items-center">
+                                        <div class="flex justify-end gap-2 items-center flex-wrap">
                                         <button onclick="copyToClipboard('<?php echo $share_link; ?>')" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-500 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider" title="Salin Link Survei">
                                             <i class="fa-regular fa-copy text-amber-500"></i> <span>LINK</span>
                                         </button>
                                         <a href="sessions?event_id=<?php echo $e['id']; ?>" class="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg font-black text-[11px] transition-all shadow-md flex items-center gap-1.5 uppercase tracking-wider" title="Lihat Rekap Data Responden">
                                             <i class="fa-solid fa-chart-line"></i> <span>REKAP</span>
+                                        </a>
+                                        <a href="questions_builder?event_id=<?php echo $e['id']; ?>" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-black text-[11px] transition-all shadow-md flex items-center gap-1.5 uppercase tracking-wider" title="Kelola Pertanyaan Event">
+                                            <i class="fa-solid fa-wand-magic-sparkles"></i> <span>PERTANYAAN</span>
                                         </a>
                                         <button type="button" onclick="editEvent(<?php echo htmlspecialchars(json_encode($e), ENT_QUOTES, 'UTF-8'); ?>)" class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider" title="Edit Detail Event">
                                             <i class="fa-solid fa-pen-to-square"></i> <span>EDIT</span>

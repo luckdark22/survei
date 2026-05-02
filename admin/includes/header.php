@@ -20,6 +20,9 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
     <link rel="stylesheet" href="../assets/css/tailwind.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <link rel="icon" type="image/png" href="../assets/img/favicon.png">
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <?php if (isset($extra_head)) echo $extra_head; ?>
     <style>
         :root {
@@ -80,9 +83,27 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             z-index: 10;
         }
         
+        /* Mobile: No sidebar offset + sidebar hidden by default */
+        @media (max-width: 1023px) {
+            .content-area { padding-left: 0 !important; }
+            #sidebar { 
+                width: var(--sidebar-width) !important; 
+                max-width: 85vw;
+                transform: translateX(-100%);
+            }
+            #sidebar.sidebar-open {
+                transform: translateX(0);
+            }
+        }
+
         @media (min-width: 1024px) {
             .content-area { padding-left: var(--sidebar-width) !important; }
             .content-area.content-collapsed { padding-left: var(--sidebar-collapsed-width) !important; }
+            #sidebar { 
+                position: fixed !important;
+                transform: translateX(0) !important; 
+                box-shadow: none !important;
+            }
             #sidebar.is-collapsed { width: var(--sidebar-collapsed-width) !important; }
             #mobileSidebarClose { display: none !important; }
         }
@@ -97,6 +118,132 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
         
         /* Prevent links from being non-clickable */
         .sidebar-link { pointer-events: auto !important; cursor: pointer !important; z-index: 101 !important; }
+
+        /* =============================================
+           RESPONSIVE UTILITY POLYFILLS
+           (tailwind.css v4 missing responsive variants)
+           ============================================= */
+
+        /* --- SM (≥640px) --- */
+        @media (min-width: 640px) {
+            .sm\:inline { display: inline !important; }
+            .sm\:block { display: block !important; }
+            .sm\:flex { display: flex !important; }
+            .sm\:px-6 { padding-left: 1.5rem !important; padding-right: 1.5rem !important; }
+            .sm\:flex-row { flex-direction: row !important; }
+            .sm\:gap-6 { gap: 1.5rem !important; }
+        }
+
+        /* --- MD (≥768px) --- */
+        @media (min-width: 768px) {
+            .md\:flex-row { flex-direction: row !important; }
+            .md\:flex-none { flex: none !important; }
+            .md\:items-center { align-items: center !important; }
+            .md\:items-end { align-items: flex-end !important; }
+            .md\:justify-between { justify-content: space-between !important; }
+            .md\:justify-end { justify-content: flex-end !important; }
+            .md\:w-auto { width: auto !important; }
+            .md\:w-auto input,
+            .md\:w-auto select { width: auto !important; }
+            .md\:block { display: block !important; }
+            .md\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+            .md\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+            .md\:grid-cols-4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+            .md\:gap-6 { gap: 1.5rem !important; }
+            .md\:p-6 { padding: 1.5rem !important; }
+            .md\:gap-8 { gap: 2rem !important; }
+        }
+
+        /* --- LG (≥1024px) --- */
+        @media (min-width: 1024px) {
+            .lg\:px-8 { padding-left: 2rem !important; padding-right: 2rem !important; }
+            .lg\:grid-cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+            .lg\:grid-cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+            .lg\:flex-row { flex-direction: row !important; }
+            .lg\:w-auto { width: auto !important; }
+            .lg\:flex { display: flex !important; }
+            .lg\:hidden { display: none !important; }
+            .lg\:gap-8 { gap: 2rem !important; }
+        }
+
+        .max-w-7xl { max-width: 80rem !important; }
+        .max-w-4xl { max-width: 56rem !important; }
+
+        /* --- Mobile Tidy-up (specifically for <768px) --- */
+        @media (max-width: 767px) {
+            .flex-col-mobile { flex-direction: column !important; }
+            .w-full-mobile { width: 100% !important; }
+            .items-stretch-mobile { align-items: stretch !important; }
+            
+            /* Tidy up ALL filters and forms */
+            form.flex-col, .flex-col { width: 100% !important; }
+            form.flex-col > div, .flex-col > div { width: 100% !important; }
+            form.flex-col input, form.flex-col select, form.flex-col button,
+            .flex-col input, .flex-col select, .flex-col button { width: 100% !important; }
+            
+            /* Spacing for stacked cards */
+            .grid-cols-1 > div { margin-bottom: 1rem; }
+            .grid-cols-1 > div:last-child { margin-bottom: 0; }
+            
+            /* Table adjustments */
+            .overflow-x-auto { -webkit-overflow-scrolling: touch; }
+        }
+
+        /* Card Hover Premium Feel */
+        .rounded-2xl { transition: box-shadow 0.2s; }
+        .rounded-2xl:hover { box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05); }
+
+        /* Responsive notification dropdown */
+        @media (max-width: 639px) {
+            #notifDropdown { width: calc(100vw - 2rem) !important; right: -1rem !important; }
+        }
+
+        /* Responsive toast positioning */
+        @media (max-width: 639px) {
+            #toastContainer { right: 1rem !important; left: 1rem !important; align-items: stretch !important; }
+        /* Select2 Premium Customization */
+        .select2-container--default .select2-selection--single {
+            height: 42px !important;
+            padding: 6px 12px !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 0.75rem !important;
+            background-color: #ffffff !important;
+            transition: all 0.2s !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__rendered {
+            color: #1e293b !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+            line-height: 28px !important;
+        }
+        .select2-container--default .select2-selection--single .select2-selection__arrow {
+            height: 40px !important;
+            right: 10px !important;
+        }
+        .select2-container--default.select2-container--focus .select2-selection--single {
+            border-color: #f59e0b !important;
+            box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1) !important;
+        }
+        .select2-dropdown {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 1rem !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            overflow: hidden !important;
+            z-index: 1000 !important;
+        }
+        .select2-results__option {
+            padding: 10px 16px !important;
+            font-size: 13px !important;
+            font-weight: 600 !important;
+        }
+        .select2-results__option--highlighted[aria-selected] {
+            background-color: #f59e0b !important;
+        }
+        .select2-search--dropdown .select2-search__field {
+            border-radius: 0.5rem !important;
+            border: 1px solid #e2e8f0 !important;
+            padding: 8px 12px !important;
+        }
     </style>
 </head>
 <body class="bg-slate-50 font-sans">
@@ -107,12 +254,12 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
         <div id="sidebarOverlay" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[40] hidden transition-opacity duration-300 opacity-0"></div>
 
         <!-- Sidebar Navigation -->
-        <aside id="sidebar" class="fixed inset-y-0 left-0 z-[50] text-slate-300 flex flex-col transform -translate-x-full transition-all duration-300 ease-in-out lg:translate-x-0 lg:static lg:inset-auto shadow-2xl lg:shadow-none shrink-0" style="height: 100vh;">
+        <aside id="sidebar" class="fixed inset-y-0 left-0 z-[50] text-slate-300 flex flex-col transition-all duration-300 ease-in-out shadow-2xl shrink-0" style="height: 100vh;">
             
             <!-- Branding & Toggle -->
             <div class="px-6 py-8 flex items-center justify-between border-b border-slate-800/50 branding-container shrink-0">
                 <div class="flex items-center gap-3 branding-content">
-                    <div class="bg-amber-500 p-2.5 rounded-xl shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
+                    <div class="bg-amber-500 p-2.5 rounded-full shrink-0 shadow-[0_0_15px_rgba(245,158,11,0.2)]">
                         <i class="fa-solid fa-square-poll-vertical text-xl text-slate-900"></i>
                     </div>
                     <div class="branding-text truncate">
@@ -163,6 +310,10 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                             <i class="fa-solid fa-users-gear" style="width: 20px; text-align: center;"></i> 
                             <span class="sidebar-text">Manajemen User</span>
                         </a>
+                        <a href="audit_trail" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl font-bold <?php echo isActive('audit_trail', $current_page); ?>" title="Audit Trail">
+                            <i class="fa-solid fa-shield-halved" style="width: 20px; text-align: center;"></i> 
+                            <span class="sidebar-text">Audit Trail</span>
+                        </a>
                     </div>
                 <?php endif; ?>
 
@@ -179,7 +330,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             <div class="p-4 bg-slate-950 border-t border-slate-800/50 shrink-0">
                 <!-- Profile -->
                 <div class="flex items-center gap-3 profile-container bg-slate-900/50 p-2 rounded-xl border border-slate-800/50">
-                    <div class="w-10 h-10 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-500 font-black shrink-0 shadow-inner">
+                    <div class="w-10 h-10 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-amber-500 font-black shrink-0 shadow-inner">
                         <?php echo strtoupper(substr($_SESSION['admin_username'] ?? 'U', 0, 1)); ?>
                     </div>
                     <div class="flex-1 min-w-0 profile-info">
@@ -200,47 +351,51 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             <!-- Top Utility Bar -->
             <header class="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-4 lg:px-8 z-[60] shrink-0">
                 <div class="flex items-center gap-4">
-                    <button id="mobileSidebarToggle" class="mobile-only-toggle p-2 text-slate-500 hover:text-amber-500 transition-colors bg-slate-100 rounded-lg">
+                    <button id="mobileSidebarToggle" class="mobile-only-toggle p-2 text-slate-500 hover:text-amber-500 transition-colors bg-slate-50 rounded-lg border border-slate-200/50 lg:hidden">
                         <i class="fa-solid fa-bars-staggered text-xl"></i>
                     </button>
-                    <div class="flex items-center gap-2 text-slate-400 text-[10px] font-black uppercase tracking-wider">
-                        <span class="hidden sm:inline">Admin</span>
-                        <i class="fa-solid fa-chevron-right text-[8px] opacity-40 hidden sm:inline"></i>
-                        <span class="text-slate-800"><?php echo $page_title ?? 'Dashboard'; ?></span>
+                    <div class="flex items-center gap-2.5 text-slate-400 text-[10px] font-bold uppercase tracking-widest">
+                        <i class="fa-solid fa-house-chimney text-[9px] opacity-40"></i>
+                        <span class="hidden sm:inline">Portal</span>
+                        <i class="fa-solid fa-chevron-right text-[7px] opacity-30 hidden sm:inline"></i>
+                        <span class="text-slate-900 font-black"><?php echo $page_title ?? 'Dashboard'; ?></span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-4">
                     <!-- Notification Bell -->
                     <div class="relative" id="notifDropdownWrapper">
-                        <button id="notifBellBtn" class="p-2.5 text-slate-400 hover:text-amber-500 transition-all relative outline-none bg-slate-50 rounded-xl border border-slate-100 hover:border-amber-200">
-                            <i class="fa-solid fa-bell"></i>
-                            <span id="notifBadge" class="hidden absolute top-0 right-0 w-4 h-4 bg-red-500 text-white text-[8px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm">0</span>
+                        <button id="notifBellBtn" class="p-2 text-slate-400 hover:text-amber-600 transition-all relative outline-none hover:bg-amber-50 rounded-xl group">
+                            <i class="fa-solid fa-bell text-lg"></i>
+                            <span id="notifBadge" class="hidden absolute top-1 right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm group-hover:scale-110 transition-transform">0</span>
                         </button>
-                        <div id="notifDropdown" class="hidden absolute right-0 mt-3 w-80 bg-white border border-slate-200 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] z-[100] overflow-hidden animate-[slideDown_0.2s_ease-out]">
+                        <div id="notifDropdown" class="hidden absolute right-0 mt-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-[slideDown_0.2s_ease-out]">
                             <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                                <span class="text-[11px] font-black text-slate-800 uppercase tracking-widest">Survei Terbaru</span>
-                                <span id="notifCountText" class="text-[9px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-full">0 Baru</span>
+                                <span class="text-[10px] font-black text-slate-800 uppercase tracking-widest">Pemberitahuan</span>
+                                <span id="notifCountText" class="text-[8px] font-black text-amber-600 bg-amber-100/50 px-2.5 py-1 rounded-full uppercase">0 Baru</span>
                             </div>
                             <div id="notifList" class="max-h-96 overflow-y-auto custom-scrollbar">
                                 <div class="p-10 text-center text-slate-400">
-                                    <i class="fa-solid fa-inbox text-3xl mb-3 opacity-20"></i>
-                                    <p class="text-[10px] font-bold uppercase tracking-tight">Kosong</p>
+                                    <i class="fa-solid fa-bell-slash text-3xl mb-3 opacity-10"></i>
+                                    <p class="text-[9px] font-bold uppercase tracking-widest opacity-40">Tidak ada notif</p>
                                 </div>
                             </div>
-                            <a href="sessions" class="block py-4 text-center text-[10px] font-black text-slate-500 hover:text-amber-600 uppercase tracking-widest bg-slate-50/50 hover:bg-slate-100 transition-colors border-t border-slate-100">
-                                Lihat Semua <i class="fa-solid fa-arrow-right ml-1"></i>
+                            <a href="sessions" class="block py-4 text-center text-[10px] font-black text-slate-400 hover:text-amber-600 uppercase tracking-widest bg-slate-50/30 hover:bg-slate-50 transition-colors border-t border-slate-100">
+                                Lihat Semua Sesi <i class="fa-solid fa-arrow-right-long ml-2"></i>
                             </a>
                         </div>
                     </div>
-                    <div class="h-8 w-px bg-slate-200 mx-1 hidden sm:block"></div>
-                    <div class="hidden sm:flex items-center gap-3 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-100">
-                        <div class="text-right">
+
+                    <div class="h-6 w-px bg-slate-200 hidden sm:block mx-1"></div>
+
+                    <!-- User Profile -->
+                    <div class="hidden sm:flex items-center gap-3 pl-2">
+                        <div class="text-right hidden md:block">
                             <p class="text-[11px] font-black text-slate-800 leading-none"><?php echo htmlspecialchars($_SESSION['admin_username'] ?? 'User'); ?></p>
-                            <p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1"><?php echo $_SESSION['user_role'] ?? 'staff'; ?></p>
+                            <p class="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1.5"><?php echo $_SESSION['user_role'] ?? 'staff'; ?></p>
                         </div>
-                        <div class="w-8 h-8 rounded-lg bg-amber-500 text-slate-900 flex items-center justify-center shadow-lg shadow-amber-500/20">
-                            <i class="fa-solid fa-user-tie"></i>
+                        <div class="w-9 h-9 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center border border-slate-200/50 hover:border-amber-200 hover:text-amber-600 transition-all cursor-pointer">
+                            <i class="fa-solid fa-circle-user text-xl"></i>
                         </div>
                     </div>
                 </div>
@@ -291,7 +446,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             }
 
             function openSidebar() {
-                sidebar.classList.remove('-translate-x-full');
+                sidebar.classList.add('sidebar-open');
                 overlay.classList.remove('hidden');
                 setTimeout(() => {
                     overlay.style.opacity = '1';
@@ -299,7 +454,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             }
 
             function closeSidebar() {
-                sidebar.classList.add('-translate-x-full');
+                sidebar.classList.remove('sidebar-open');
                 overlay.style.opacity = '0';
                 setTimeout(() => {
                     overlay.classList.add('hidden');
@@ -380,4 +535,11 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
         document.head.appendChild(st);
         <?php if (isset($_SESSION['success'])): ?> window.addEventListener('load', () => showToast("<?php echo $_SESSION['success']; ?>", 'success')); <?php unset($_SESSION['success']); endif; ?>
         <?php if (isset($_SESSION['error'])): ?> window.addEventListener('load', () => showToast("<?php echo $_SESSION['error']; ?>", 'error')); <?php unset($_SESSION['error']); endif; ?>
+        
+        // Initialize Select2
+        $(document).ready(function() {
+            $('select:not(.no-select2)').select2({
+                width: '100%'
+            });
+        });
     </script>

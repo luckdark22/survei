@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
+require_once '../includes/utils.php';
 checkAuth();
 
 // ONLY ADMIN can access global settings
@@ -18,6 +19,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $text = $_POST['running_text'] ?? '';
             $stmt = $pdo->prepare("UPDATE settings SET setting_value = ? WHERE setting_key = 'running_text'");
             $stmt->execute([$text]);
+            
+            logActivity($pdo, 'UPDATE_SETTINGS', "Updated running text: " . substr($text, 0, 50) . "...");
+            
             $_SESSION['success'] = 'Running text berhasil diperbarui!';
             header("Location: settings");
             exit;
@@ -26,6 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Fix: Added missing VALUES (?, ?) clause
             $stmt = $pdo->prepare("INSERT INTO settings (setting_key, setting_value) VALUES (?, ?) ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)");
             $stmt->execute(['instansi_name', $name]);
+            
+            logActivity($pdo, 'UPDATE_SETTINGS', "Updated instansi name to: $name");
+            
             $_SESSION['success'] = 'Nama instansi berhasil diperbarui!';
             header("Location: settings");
             exit;

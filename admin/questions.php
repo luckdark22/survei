@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $type = $_POST['type'] ?? 'rating';
             $order_num = $_POST['order_num'] ?? 0;
             $placeholder = $_POST['placeholder'] ?? '';
+            $options = $_POST['options'] ?? '';
             $event_id = $_POST['event_id'] ?: null;
 
             // RBAC: Staff cannot create global questions
@@ -33,9 +34,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             
             if ($type === 'rating') $placeholder = null;
 
-            $stmt = $pdo->prepare("INSERT INTO questions (event_id, question_key, section, question, type, order_num, placeholder) VALUES (?, ?, ?, ?, ?, ?, ?)");
+            $stmt = $pdo->prepare("INSERT INTO questions (event_id, question_key, section, question, type, order_num, placeholder, options) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
             try {
-                $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder]);
+                $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder, $options]);
+                
+                logActivity($pdo, 'CREATE_QUESTION', "Created question: $key (Event ID: $event_id)");
+                
                 $_SESSION['success'] = "Pertanyaan berhasil ditambahkan!";
             } catch (PDOException $e) {
                 $_SESSION['error'] = "Gagal menambah: " . $e->getMessage();
@@ -49,6 +53,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $type = $_POST['type'] ?? 'rating';
             $order_num = $_POST['order_num'] ?? 0;
             $placeholder = $_POST['placeholder'] ?? '';
+            $options = $_POST['options'] ?? '';
             $event_id = $_POST['event_id'] ?: null;
 
             // Security Check: Existing question ownership
@@ -73,9 +78,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             if ($type === 'rating') $placeholder = null;
 
-            $stmt = $pdo->prepare("UPDATE questions SET event_id = ?, question_key = ?, section = ?, question = ?, type = ?, order_num = ?, placeholder = ? WHERE id = ?");
+            $stmt = $pdo->prepare("UPDATE questions SET event_id = ?, question_key = ?, section = ?, question = ?, type = ?, order_num = ?, placeholder = ?, options = ? WHERE id = ?");
             try {
-                $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder, $id]);
+                $stmt->execute([$event_id, $key, $section, $question, $type, $order_num, $placeholder, $options, $id]);
+                
+                logActivity($pdo, 'UPDATE_QUESTION', "Updated question: $key (ID: $id)");
+                
                 $_SESSION['success'] = "Pertanyaan berhasil diperbarui!";
             } catch (PDOException $e) {
                 $_SESSION['error'] = "Gagal simpan: " . $e->getMessage();
@@ -97,10 +105,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($_POST['action'] === 'toggle') {
                 $stmt = $pdo->prepare("UPDATE questions SET is_active = NOT is_active WHERE id = ?");
                 $stmt->execute([$id]);
+                
+                logActivity($pdo, 'TOGGLE_QUESTION', "Toggled status of question ID: $id");
+                
                 $_SESSION['success'] = "Status pertanyaan diubah!";
             } else {
                 $stmt = $pdo->prepare("DELETE FROM questions WHERE id = ?");
                 $stmt->execute([$id]);
+                
+                logActivity($pdo, 'DELETE_QUESTION', "Deleted question ID: $id");
+                
                 $_SESSION['success'] = "Pertanyaan berhasil dihapus!";
             }
         }
@@ -178,6 +192,13 @@ if ($filter_event_id) {
 <?php
 $page_title = "Kelola Pertanyaan";
 $page_icon = "fa-list-check";
+
+// Build query string for pagination
+$page_params = $_GET;
+unset($page_params['page']);
+$query_str = http_build_query($page_params);
+$query_str = $query_str ? '&' . $query_str : '';
+
 require_once 'includes/header.php';
 ?>
 
@@ -185,7 +206,7 @@ require_once 'includes/header.php';
         
         <!-- List of Questions -->
         <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
-            <div class="px-6 py-5 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 gap-4">
+            <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-slate-50/50 gap-4">
                 <div class="flex flex-col lg:flex-row items-center gap-4 w-full">
                     <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 mr-auto">
                         <i class="fa-solid fa-list-check text-amber-500"></i>
@@ -208,7 +229,7 @@ require_once 'includes/header.php';
                         <!-- Event Selector -->
                         <form method="GET" class="w-full md:w-auto">
                             <?php if($search): ?><input type="hidden" name="search" value="<?php echo htmlspecialchars($search); ?>"><?php endif; ?>
-                            <select name="event_id" onchange="this.form.submit()" class="w-full md:w-auto px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer h-[40px]">
+                            <select name="event_id" onchange="this.form.submit()" class="no-select2 appearance-none w-full md:w-auto px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_1rem_center] bg-[length:1.2em_1.2em] pr-10 hover:border-amber-300 transition-all duration-200">
                                 <?php if (isAdmin()): ?>
                                     <option value="">Semua Event (Global)</option>
                                 <?php else: ?>
@@ -262,7 +283,7 @@ require_once 'includes/header.php';
                                             <span class="text-slate-400 font-bold text-xs"><i class="fa-regular fa-circle text-[10px]"></i> Non-aktif</span>
                                         <?php endif; ?>
                                     </td>
-                                    <td class="px-4 py-4 text-right flex justify-end gap-2">
+                                    <td class="px-4 py-4 text-right flex justify-end gap-2 flex-wrap">
                                         <button type="button" 
                                                 onclick="editQuestion(<?php echo htmlspecialchars(json_encode($q), ENT_QUOTES, 'UTF-8'); ?>)"
                                                 class="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-lg font-black text-[11px] transition-all shadow-md flex items-center gap-1.5 uppercase tracking-wider" title="Edit Pertanyaan">
@@ -345,7 +366,7 @@ require_once 'includes/header.php';
                             <div class="flex justify-between items-center mb-1">
                                 <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Gunakan di Event</label>
                             </div>
-                            <select name="event_id" id="field_event_id" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 bg-white cursor-pointer" required>
+                            <select name="event_id" id="field_event_id" class="no-select2 appearance-none w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_1rem_center] bg-[length:1.25em_1.25em] pr-10 shadow-sm transition-all duration-200 hover:border-amber-300" required>
                                 <option value="">-- Pilih Event --</option>
                                 <?php foreach($events as $ev): ?>
                                     <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>><?php echo htmlspecialchars($ev['name']); ?></option>
@@ -372,9 +393,14 @@ require_once 'includes/header.php';
                     <div class="grid grid-cols-2 gap-5">
                         <div>
                             <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Tipe Input</label>
-                            <select name="type" id="field_type" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 bg-white" required>
+                            <select name="type" id="field_type" onchange="toggleOptionsField(this.value)" class="no-select2 appearance-none w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_1rem_center] bg-[length:1.25em_1.25em] pr-10 shadow-sm transition-all duration-200 hover:border-amber-300" required>
                                 <option value="rating">Emoji Rating</option>
                                 <option value="text">Teks / Saran</option>
+                                <option value="number">Input Angka</option>
+                                <option value="email">Input Email</option>
+                                <option value="date">Input Tanggal</option>
+                                <option value="select">Pilihan Dropdown (Select)</option>
+                                <option value="checkbox">Pilihan Banyak (Checkbox)</option>
                             </select>
                         </div>
                         <div>
@@ -384,8 +410,14 @@ require_once 'includes/header.php';
                     </div>
 
                     <div>
-                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Placeholder (Khusus Teks)</label>
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Placeholder (Opsional)</label>
                         <input type="text" name="placeholder" id="field_placeholder" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none font-medium text-slate-600" placeholder="Tulis masukan Anda di sini...">
+                    </div>
+
+                    <div id="options_wrapper" style="display:none;">
+                        <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Opsi Pilihan (Pisahkan dengan koma)</label>
+                        <textarea name="options" id="field_options" class="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm h-20 focus:ring-2 focus:ring-amber-500 focus:outline-none resize-none font-medium text-slate-600" placeholder="Pilihan 1, Pilihan 2, Pilihan 3"></textarea>
+                        <p class="text-[9px] text-slate-400 mt-1 italic">*Wajib diisi untuk tipe Select dan Checkbox.</p>
                     </div>
 
                     <div class="flex gap-3 mt-2">
@@ -495,6 +527,9 @@ require_once 'includes/header.php';
             document.getElementById('field_type').value = data.type;
             document.getElementById('field_order_num').value = data.order_num;
             document.getElementById('field_placeholder').value = data.placeholder || '';
+            document.getElementById('field_options').value = data.options || '';
+            
+            toggleOptionsField(data.type);
 
             // Show modal
             document.getElementById('questionModal').style.display = 'flex';
@@ -517,7 +552,7 @@ require_once 'includes/header.php';
             title.classList.add('text-amber-800');
             
             document.getElementById('field_key').readOnly = true; 
-            
+            toggleOptionsField('rating');            
             // Keep current event filter if any
             const currentEventId = "<?php echo $filter_event_id; ?>";
             if (currentEventId) {
@@ -533,6 +568,17 @@ require_once 'includes/header.php';
 
         function closeDeleteModal() {
             document.getElementById('deleteModal').style.display = 'none';
+        }
+
+        function toggleOptionsField(type) {
+            const wrapper = document.getElementById('options_wrapper');
+            if (type === 'select' || type === 'checkbox') {
+                wrapper.style.display = 'block';
+                document.getElementById('field_options').required = true;
+            } else {
+                wrapper.style.display = 'none';
+                document.getElementById('field_options').required = false;
+            }
         }
     </script>
 <?php require_once 'includes/footer.php'; ?>

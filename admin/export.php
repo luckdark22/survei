@@ -49,7 +49,7 @@ $where_clause = count($where_clause_array) > 0 ? "WHERE " . implode(" AND ", $wh
 
 // Fetch all questions mapped to history
 $stmt = $pdo->prepare("
-    SELECT s.id as session_id, s.created_at, q.question_key, a.question_text, a.answer_value, e.name as event_name
+    SELECT s.id as session_id, s.created_at, s.user_agent, s.ip_address, q.question_key, a.question_text, a.answer_value, e.name as event_name
     FROM survey_sessions s 
     LEFT JOIN survey_answers a ON s.id = a.session_id 
     LEFT JOIN questions q ON a.question_id = q.id 
@@ -74,6 +74,8 @@ foreach($raw_data as $row) {
             'id' => $sid,
             'time' => $row['created_at'],
             'event' => $row['event_name'] ?: 'Umum',
+            'user_agent' => $row['user_agent'],
+            'ip' => $row['ip_address'],
             'answers' => []
         ];
     }
@@ -99,7 +101,7 @@ $output = fopen('php://output', 'w');
 fputs($output, $bom =(chr(0xEF) . chr(0xBB) . chr(0xBF)));
 
 // Write Headers
-$headers = ['Kode Sesi', 'Event', 'Waktu Pengisian (Timestamp)'];
+$headers = ['Kode Sesi', 'Event', 'Waktu Pengisian (Timestamp)', 'User Agent', 'IP Address'];
 foreach($unique_qs as $key => $title) {
     $headers[] = $title;
 }
@@ -107,7 +109,7 @@ fputcsv($output, $headers);
 
 // Write Data Rows
 foreach($sessions as $sid => $sess) {
-    $row = ["S-" . str_pad($sid, 6, "0", STR_PAD_LEFT), $sess['event'], $sess['time']];
+    $row = ["S-" . str_pad($sid, 6, "0", STR_PAD_LEFT), $sess['event'], $sess['time'], $sess['user_agent'], $sess['ip']];
     foreach($unique_qs as $key => $title) {
         $row[] = isset($sess['answers'][$key]) ? $sess['answers'][$key] : '-';
     }

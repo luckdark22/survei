@@ -1,6 +1,7 @@
 <?php
 require_once '../includes/db.php';
 require_once '../includes/auth.php';
+require_once '../includes/utils.php';
 checkAuth();
 
 // ONLY ADMIN can access this page
@@ -26,6 +27,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("INSERT INTO users (username, password, role) VALUES (?, ?, ?)");
                 try {
                     $stmt->execute([$username, $hashed, $role]);
+                    
+                    logActivity($pdo, 'CREATE_USER', "Created user: $username (Role: $role)");
+                    
                     $_SESSION['success'] = "User $username berhasil ditambahkan!";
                 } catch (PDOException $e) {
                     $_SESSION['error'] = "Gagal menambah user: Username mungkin sudah ada.";
@@ -45,6 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("UPDATE users SET username = ?, role = ? WHERE id = ?");
                 $stmt->execute([$username, $role, $id]);
             }
+            
+            logActivity($pdo, 'UPDATE_USER', "Updated user: $username (ID: $id, Role: $role)");
+            
             $_SESSION['success'] = "User $username berhasil diperbarui!";
         } elseif ($_POST['action'] === 'delete') {
             $id = $_POST['id'];
@@ -52,6 +59,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($id != $_SESSION['user_id']) {
                 $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
                 $stmt->execute([$id]);
+                
+                logActivity($pdo, 'DELETE_USER', "Deleted user ID: $id");
+                
                 $_SESSION['success'] = "User berhasil dihapus!";
             } else {
                 $_SESSION['error'] = "Anda tidak bisa menghapus akun Anda sendiri!";
@@ -97,6 +107,13 @@ $users = $stmt->fetchAll();
 <?php
 $page_title = "Manajemen User";
 $page_icon = "fa-users-gear";
+
+// Build query string for pagination links
+$page_params = $_GET;
+unset($page_params['page']);
+$query_str = http_build_query($page_params);
+$query_str = $query_str ? '&' . $query_str : '';
+
 require_once 'includes/header.php';
 ?>
 
@@ -117,7 +134,7 @@ require_once 'includes/header.php';
     <?php endif; ?>
 
     <div class="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden mb-10">
-        <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-center bg-slate-50/50 gap-4">
+        <div class="px-6 py-5 border-b border-slate-100 flex flex-col md:flex-row justify-between items-stretch md:items-center bg-slate-50/50 gap-4">
             <div class="flex items-center gap-4 w-full md:w-auto">
                 <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 whitespace-nowrap">
                     <i class="fa-solid fa-users text-amber-500"></i>
@@ -170,7 +187,7 @@ require_once 'includes/header.php';
                                 </td>
                                 <td class="px-4 py-4 text-center text-slate-500 font-medium"><?php echo date('d M Y', strtotime($u['created_at'])); ?></td>
                                 <td class="px-4 py-4 text-right">
-                                    <div class="flex justify-end gap-2">
+                                    <div class="flex justify-end gap-2 flex-wrap">
                                         <button onclick='editUser(<?php echo json_encode($u); ?>)' class="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg font-black text-[11px] transition-all flex items-center gap-1.5 uppercase tracking-wider">
                                             <i class="fa-solid fa-pen-to-square"></i> <span>EDIT</span>
                                         </button>
@@ -197,7 +214,7 @@ require_once 'includes/header.php';
                     <div class="flex items-center gap-1">
                         <?php if ($page > 1): ?>
                             <a href="?page=<?php echo $page - 1; ?><?php echo $query_str; ?>" 
-                               style="display: flex; align-items: center; justify-center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
+                               style="display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 12px; border: 1px solid #e2e8f0; background: white; color: #64748b; text-decoration: none; transition: all 0.2s; font-size: 10px;">
                                 <i class="fa-solid fa-chevron-left"></i>
                             </a>
                         <?php endif; ?>

@@ -1,5 +1,6 @@
 <?php
 require_once '../includes/db.php';
+require_once '../includes/utils.php';
 session_start();
 
 if (isset($_SESSION['admin_logged_in']) && $_SESSION['admin_logged_in'] === true) {
@@ -21,6 +22,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $_SESSION['user_id'] = $user['id'];
         $_SESSION['admin_username'] = $user['username'];
         $_SESSION['user_role'] = $user['role']; // e.g., 'admin' or 'staff'
+        
+        logActivity($pdo, 'LOGIN', 'Admin logged in');
+        
         header("Location: ./");
         exit;
     } else {

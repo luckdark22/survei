@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const optionCards = document.querySelectorAll('.option-card');
     const surveyForm = document.getElementById('surveyForm');
     const btnNext = document.querySelector('.btn-next');
-    const feedbackTextarea = document.querySelector('.feedback-textarea');
+    const feedbackTextarea = document.querySelector('.feedback-textarea, input[name="response"]:not([type="radio"])');
     const virtualKeyboard = document.getElementById('virtualKeyboard');
 
     // --- Form Safeguards ---
@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Final sanity check on submission
         surveyForm.addEventListener('submit', function(e) {
-            const responseInput = surveyForm.querySelector('[name="response"]:checked, textarea[name="response"]');
+            const responseInput = surveyForm.querySelector('[name="response"]:checked, textarea[name="response"], input[name="response"]:not([type="radio"])');
             // Use tracked button instead of e.submitter for broad compatibility
             const action = lastClickedButton ? lastClickedButton.value : '';
             
@@ -41,7 +41,9 @@ document.addEventListener('DOMContentLoaded', function() {
             }
 
             // For next/submit, validate answers
-            if (!responseInput || (responseInput.tagName === 'TEXTAREA' && responseInput.value.trim().length < 3)) {
+            if (!responseInput || 
+                (responseInput.tagName === 'TEXTAREA' && responseInput.value.trim().length < 3) ||
+                (responseInput.tagName === 'INPUT' && responseInput.type !== 'radio' && responseInput.value.trim().length < 1)) {
                 e.preventDefault();
                 console.warn('Submission blocked: Response missing or too short.');
                 return false;
@@ -188,7 +190,8 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         function validateTextarea() {
-            if (feedbackTextarea.value.trim().length > 3) {
+            const minLength = feedbackTextarea.tagName === 'TEXTAREA' ? 3 : 0;
+            if (feedbackTextarea.value.trim().length > minLength) {
                 btnNext.disabled = false;
                 btnNext.classList.add('pulse');
             } else {
@@ -231,8 +234,34 @@ document.addEventListener('DOMContentLoaded', function() {
         feedbackTextarea.addEventListener('input', validateTextarea);
     }
 
+    // --- Generic Input Validation (for Number, Email, Date) ---
+    const genericInputs = document.querySelectorAll('input[name="response"]:not([type="radio"])');
+    console.log("Found generic inputs:", genericInputs.length);
+    genericInputs.forEach(input => {
+        const validateInput = () => {
+            console.log("Validating input:", input.value);
+            if (input.value.trim().length > 0) {
+                if (btnNext) {
+                    console.log("Enabling next button");
+                    btnNext.disabled = false;
+                    btnNext.classList.add('pulse');
+                }
+            } else {
+                if (btnNext) {
+                    console.log("Disabling next button");
+                    btnNext.disabled = true;
+                    btnNext.classList.remove('pulse');
+                }
+            }
+        };
+        input.addEventListener('input', validateInput);
+        input.addEventListener('change', validateInput); // Needed for date picker
+        // Run once on load for pre-filled data
+        if (input.value.trim().length > 0) validateInput();
+    });
+
     // --- Celebration Fireworks on Thank You Screen ---
-    const successScreen = document.querySelector('.fa-heart-circle-check');
+    const successScreen = document.querySelector('.fa-heart-circle-check, .fa-clipboard-check');
     if (successScreen && typeof confetti === 'function') {
         // Grand firework burst sequence
         const duration = 3000;

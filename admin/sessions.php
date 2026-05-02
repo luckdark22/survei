@@ -88,7 +88,7 @@ $raw_data = [];
 if (!empty($session_ids)) {
     $placeholders = implode(',', array_fill(0, count($session_ids), '?'));
     $stmt = $pdo->prepare("
-        SELECT s.id as session_id, s.created_at, q.question_key, a.question_text, a.answer_value, e.name as event_name
+        SELECT s.id as session_id, s.created_at, s.user_agent, s.ip_address, q.question_key, a.question_text, a.answer_value, e.name as event_name
         FROM survey_sessions s 
         LEFT JOIN survey_answers a ON s.id = a.session_id 
         LEFT JOIN questions q ON a.question_id = q.id 
@@ -113,6 +113,8 @@ foreach($raw_data as $row) {
             'id' => $sid,
             'time' => $row['created_at'],
             'event' => $row['event_name'] ?: 'Umum',
+            'user_agent' => $row['user_agent'],
+            'ip' => $row['ip_address'],
             'answers' => []
         ];
     }
@@ -205,6 +207,26 @@ if ($start_date && $end_date) {
 }
 ?>
 <?php
+function parseUA($ua) {
+    if (!$ua) return 'Kiosk / Manual';
+    $os = 'Unknown OS';
+    $browser = 'Unknown Browser';
+
+    if (preg_match('/windows|win32/i', $ua)) $os = 'Windows';
+    elseif (preg_match('/android/i', $ua)) $os = 'Android';
+    elseif (preg_match('/iphone|ipad|ipod/i', $ua)) $os = 'iOS';
+    elseif (preg_match('/linux/i', $ua)) $os = 'Linux';
+    elseif (preg_match('/macintosh|mac os x/i', $ua)) $os = 'MacOS';
+
+    if (preg_match('/chrome/i', $ua)) $browser = 'Chrome';
+    elseif (preg_match('/firefox/i', $ua)) $browser = 'Firefox';
+    elseif (preg_match('/safari/i', $ua) && !preg_match('/chrome/i', $ua)) $browser = 'Safari';
+    elseif (preg_match('/msie|trident/i', $ua)) $browser = 'IE';
+    elseif (preg_match('/edge/i', $ua)) $browser = 'Edge';
+
+    return $os . ' / ' . $browser;
+}
+
 $page_title = "Data Responden";
 $page_icon = "fa-table-list";
 require_once 'includes/header.php';
@@ -295,7 +317,7 @@ require_once 'includes/header.php';
         transition: all 0.2s;
         box-shadow: 0 2px 4px rgba(0,0,0,0.02);
     }
-    .custom-stat-card:hover { transform: translateY(-3px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.05); }
+    .custom-stat-card:hover { box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.05); }
     .stat-label { font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 6px; display: block; }
     .stat-val { font-size: 32px; font-weight: 950; color: #1e293b; line-height: 1; letter-spacing: -1px; }
     .stat-icon { position: absolute; right: -10px; bottom: -10px; font-size: 72px; color: #f1f5f9; opacity: 0.5; transform: rotate(-15deg); transition: all 0.3s; }
@@ -344,7 +366,7 @@ require_once 'includes/header.php';
     .rating-low { background: #fef2f2; color: #dc2626; }
 
     /* Charts Row */
-    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 32px; margin-bottom: 48px; }
+    .charts-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 32px; margin-bottom: 48px; }
     .chart-card { background: white; padding: 24px; border-radius: 24px; border: 1px solid #e2e8f0; }
     .chart-title { font-size: 13px; font-weight: 900; color: #1e293b; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 24px; display: flex; align-items: center; gap: 8px; }
 
@@ -360,7 +382,7 @@ require_once 'includes/header.php';
     
     <!-- Filter Bar -->
     <div class="custom-filter-bar">
-        <form method="GET" class="flex flex-wrap items-end gap-4 w-full">
+        <form method="GET" class="flex flex-col md:flex-row md:items-end gap-4 w-full">
             <div class="filter-group">
                 <label class="filter-label">Tanggal Mulai</label>
                 <input type="date" name="start_date" value="<?php echo htmlspecialchars($start_date); ?>" class="filter-input">
@@ -371,7 +393,7 @@ require_once 'includes/header.php';
             </div>
             <div class="filter-group" style="flex: 1.5;">
                 <label class="filter-label">Berdasarkan Event</label>
-                <select name="event_id" class="filter-input">
+                <select name="event_id" class="filter-input" style="width: 100%; height: 44px; border-radius: 12px;">
                     <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Seluruh Event'; ?></option>
                     <?php foreach($events_list as $ev): ?>
                         <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
@@ -441,6 +463,8 @@ require_once 'includes/header.php';
                         <th class="sticky-col">KODE SESI</th>
                         <th>NAMA EVENT</th>
                         <th>WAKTU PENGISIAN</th>
+                        <th>DEVICE</th>
+                        <th>IP ADDRESS</th>
                         <?php foreach($unique_qs as $key => $title): ?>
                             <th style="min-width: 250px;">
                                 <?php echo htmlspecialchars($title); ?>
@@ -455,6 +479,8 @@ require_once 'includes/header.php';
                                 <td class="sticky-col font-black" style="color: #f59e0b;">#<?php echo str_pad($sid, 5, '0', STR_PAD_LEFT); ?></td>
                                 <td><?php echo htmlspecialchars($sess['event']); ?></td>
                                 <td style="color: #94a3b8;"><?php echo date('d M Y, H:i', strtotime($sess['time'])); ?></td>
+                                <td class="text-[10px] font-bold text-slate-500"><?php echo parseUA($sess['user_agent']); ?></td>
+                                <td class="text-[10px] font-bold text-slate-400"><?php echo htmlspecialchars($sess['ip'] ?: '-'); ?></td>
                                 <?php foreach($unique_qs as $key => $title): ?>
                                     <td>
                                         <?php 
@@ -478,15 +504,15 @@ require_once 'includes/header.php';
                     <?php endif; ?>
                 </tbody>
             </table>
-        </div>
-        
+    </div>
+
         <!-- Pagination UI -->
-        <div style="padding: 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
+        <div style="padding: 24px; background: #f8fafc; border-top: 1px solid #e2e8f0; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px;">
             <div style="font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase;">
                 Menampilkan <?php echo count($sessions); ?> dari <?php echo $total_count; ?> entries
             </div>
             <?php if ($total_pages > 1): ?>
-                <div style="display: flex; gap: 8px;">
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
                     <?php for ($i = 1; $i <= $total_pages; $i++): ?>
                         <a href="?page=<?php echo $i; ?>&<?php echo $query_string; ?>" 
                            style="width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 800; text-decoration: none; transition: all 0.2s; <?php echo $i === $page ? 'background: #f59e0b; color: white;' : 'background: white; color: #64748b; border: 1px solid #e2e8f0;'; ?>">

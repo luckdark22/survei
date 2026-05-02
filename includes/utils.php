@@ -33,4 +33,21 @@ function unmaskId($mask) {
     $id = ((int)$parts[0] - 6789) / 12345;
     return is_numeric($id) && $id > 0 ? (int)$id : null;
 }
+
+/**
+ * Log an administrative activity
+ */
+function logActivity($pdo, $action, $details = null) {
+    try {
+        $user_id = $_SESSION['user_id'] ?? null;
+        $username = $_SESSION['admin_username'] ?? 'System';
+        $ip = $_SERVER['REMOTE_ADDR'] ?? 'Unknown';
+        
+        $stmt = $pdo->prepare("INSERT INTO audit_logs (user_id, username, action, details, ip_address) VALUES (?, ?, ?, ?, ?)");
+        $stmt->execute([$user_id, $username, $action, $details, $ip]);
+    } catch (Exception $e) {
+        // Silently fail to prevent breaking the main flow
+        error_log("Audit log failed: " . $e->getMessage());
+    }
+}
 ?>
