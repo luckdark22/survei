@@ -401,6 +401,7 @@ require_once 'includes/header.php';
                                 <option value="date">Input Tanggal</option>
                                 <option value="select">Pilihan Dropdown (Select)</option>
                                 <option value="checkbox">Pilihan Banyak (Checkbox)</option>
+                                <option value="combobox">Combo Box (Searchable)</option>
                             </select>
                         </div>
                         <div>
@@ -572,7 +573,7 @@ require_once 'includes/header.php';
 
         function toggleOptionsField(type) {
             const wrapper = document.getElementById('options_wrapper');
-            if (type === 'select' || type === 'checkbox') {
+            if (type === 'select' || type === 'checkbox' || type === 'combobox') {
                 wrapper.style.display = 'block';
                 document.getElementById('field_options').required = true;
             } else {

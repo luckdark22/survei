@@ -36,9 +36,10 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
             to { opacity: 1; transform: translateY(0); }
         }
         
-        .custom-scrollbar::-webkit-scrollbar { width: 4px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f8fafc; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
         
         /* Sidebar Link Styling */
         .sidebar-link {
@@ -293,10 +294,13 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                     <span class="sidebar-text">Kelola Event</span>
                 </a>
                 
+                <!-- Hidden Pertanyaan Menu as requested -->
+                <?php if (false): ?>
                 <a href="questions" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl font-bold <?php echo isActive('questions', $current_page); ?>" title="Pertanyaan">
                     <i class="fa-solid fa-list-check" style="width: 20px; text-align: center;"></i> 
                     <span class="sidebar-text">Pertanyaan</span>
                 </a>
+                <?php endif; ?>
                 
                 <a href="sessions" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl font-bold <?php echo isActive('sessions', $current_page); ?>" title="Data Responden">
                     <i class="fa-solid fa-users" style="width: 20px; text-align: center;"></i> 
@@ -369,10 +373,10 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                             <i class="fa-solid fa-bell text-lg"></i>
                             <span id="notifBadge" class="hidden absolute top-1 right-1 w-3.5 h-3.5 bg-rose-500 text-white text-[7px] font-black flex items-center justify-center rounded-full border-2 border-white shadow-sm group-hover:scale-110 transition-transform">0</span>
                         </button>
-                        <div id="notifDropdown" class="hidden absolute right-0 mt-4 w-80 bg-white border border-slate-200 rounded-2xl shadow-[0_20px_60px_-10px_rgba(0,0,0,0.2)] z-[100] overflow-hidden animate-[slideDown_0.2s_ease-out]">
-                            <div class="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-                                <span class="text-[10px] font-black text-slate-800 uppercase tracking-widest">Pemberitahuan</span>
-                                <span id="notifCountText" class="text-[8px] font-black text-amber-600 bg-amber-100/50 px-2.5 py-1 rounded-full uppercase">0 Baru</span>
+                        <div id="notifDropdown" class="hidden absolute right-0 mt-3 w-[22rem] bg-white border border-slate-200 rounded-3xl shadow-[0_20px_50px_-12px_rgba(0,0,0,0.15)] z-[100] overflow-hidden animate-[slideDown_0.2s_ease-out]">
+                            <div class="px-6 py-5 border-b border-slate-50 flex justify-between items-center bg-white">
+                                <span class="text-[10px] font-black text-slate-800 uppercase tracking-[0.2em]">Pemberitahuan</span>
+                                <span id="notifCountText" class="text-[9px] font-black text-white bg-amber-500 px-3 py-1 rounded-full uppercase tracking-tighter shadow-[0_4px_10px_rgba(245,158,11,0.3)]">0 Baru</span>
                             </div>
                             <div id="notifList" class="max-h-96 overflow-y-auto custom-scrollbar">
                                 <div class="p-10 text-center text-slate-400">
@@ -495,14 +499,16 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                         countText.textContent = data.unread_count + ' Baru';
                         if (data.latest.length > 0) {
                             list.innerHTML = data.latest.map(n => `
-                                <a href="sessions" class="flex items-start gap-4 px-5 py-4 hover:bg-slate-50 transition-colors border-b border-slate-50 group">
-                                    <div class="w-9 h-9 rounded-xl bg-slate-100 group-hover:bg-amber-100 flex items-center justify-center text-slate-400 group-hover:text-amber-600 shrink-0 transition-all border border-slate-100">
-                                        <i class="fa-solid fa-file-invoice text-sm"></i>
+                                <a href="sessions" class="flex items-start gap-4 px-6 py-5 hover:bg-slate-50 transition-all border-b border-slate-50 group">
+                                    <div class="w-11 h-11 rounded-2xl bg-slate-50 group-hover:bg-amber-100/50 flex items-center justify-center text-slate-400 group-hover:text-amber-600 shrink-0 transition-all border border-slate-100 group-hover:border-amber-200/50">
+                                        <i class="fa-solid fa-file-circle-check text-base"></i>
                                     </div>
                                     <div class="flex-1 min-w-0">
-                                        <p class="text-[11px] font-black text-slate-800 leading-tight mb-1 truncate">${n.event_name || 'Umum'}</p>
+                                        <p class="text-[12px] font-bold text-slate-800 leading-tight mb-1.5">${n.event_name || 'Sesi Baru'}</p>
                                         <div class="flex items-center gap-2">
-                                            <span class="text-[8px] font-black text-slate-400 uppercase tracking-tighter">${n.created_at}</span>
+                                            <span class="text-[9px] font-bold text-slate-400 uppercase tracking-tight">${n.created_at}</span>
+                                            <span class="w-1 h-1 rounded-full bg-slate-200"></span>
+                                            <span class="text-[9px] font-bold text-amber-600 uppercase tracking-tight">Baru Saja</span>
                                         </div>
                                     </div>
                                 </a>

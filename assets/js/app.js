@@ -31,7 +31,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Final sanity check on submission
         surveyForm.addEventListener('submit', function(e) {
-            const responseInput = surveyForm.querySelector('[name="response"]:checked, textarea[name="response"], input[name="response"]:not([type="radio"])');
+            const responseInput = surveyForm.querySelector('[name="response"]:checked, [name="response[]"]:checked, textarea[name="response"], select[name="response"], input[name="response"]:not([type="radio"]):not([type="checkbox"])');
             // Use tracked button instead of e.submitter for broad compatibility
             const action = lastClickedButton ? lastClickedButton.value : '';
             
@@ -43,7 +43,8 @@ document.addEventListener('DOMContentLoaded', function() {
             // For next/submit, validate answers
             if (!responseInput || 
                 (responseInput.tagName === 'TEXTAREA' && responseInput.value.trim().length < 3) ||
-                (responseInput.tagName === 'INPUT' && responseInput.type !== 'radio' && responseInput.value.trim().length < 1)) {
+                (responseInput.tagName === 'SELECT' && responseInput.value === '') ||
+                (responseInput.tagName === 'INPUT' && responseInput.type !== 'radio' && responseInput.type !== 'checkbox' && responseInput.value.trim().length < 1)) {
                 e.preventDefault();
                 console.warn('Submission blocked: Response missing or too short.');
                 return false;
@@ -259,6 +260,22 @@ document.addEventListener('DOMContentLoaded', function() {
         // Run once on load for pre-filled data
         if (input.value.trim().length > 0) validateInput();
     });
+    
+    // --- Checkbox Validation ---
+    const checkBoxes = document.querySelectorAll('input[name="response[]"]');
+    if (checkBoxes.length > 0) {
+        const validateCheckboxes = () => {
+            const anyChecked = document.querySelectorAll('input[name="response[]"]:checked').length > 0;
+            if (btnNext) {
+                btnNext.disabled = !anyChecked;
+                if (anyChecked) btnNext.classList.add('pulse');
+                else btnNext.classList.remove('pulse');
+            }
+        };
+        checkBoxes.forEach(cb => cb.addEventListener('change', validateCheckboxes));
+        // Run once on load
+        validateCheckboxes();
+    }
 
     // --- Celebration Fireworks on Thank You Screen ---
     const successScreen = document.querySelector('.fa-heart-circle-check, .fa-clipboard-check');
@@ -337,5 +354,113 @@ document.addEventListener('DOMContentLoaded', function() {
         if (helpModalBackdrop) helpModalBackdrop.addEventListener('click', closeModal);
         const closeHelpIconBtn = document.getElementById('closeHelpIconBtn');
         if (closeHelpIconBtn) closeHelpIconBtn.addEventListener('click', closeModal);
+    }
+
+    // --- Select2 Initialization for Combo Box ---
+    if ($ && typeof $.fn.select2 === 'function') {
+        $('.select2-combobox').each(function() {
+            const $this = $(this);
+            $this.select2({
+                width: '100%',
+                dropdownParent: $('#surveyContainer')
+            }).on('change', function() {
+                const btn = document.querySelector('.btn-next');
+                const val = $this.val();
+                if (btn) {
+                    btn.disabled = (!val || val === '');
+                    if (!btn.disabled) btn.classList.add('pulse');
+                    else btn.classList.remove('pulse');
+                }
+            });
+            // Initial check
+            $this.trigger('change');
+        });
+
+        // Custom Select2 Styling to match UI
+        const style = document.createElement('style');
+        style.innerHTML = `
+            .select2-container--default .select2-selection--single {
+                height: 70px !important;
+                background: rgba(255, 255, 255, 0.4) !important;
+                backdrop-filter: blur(12px) !important;
+                border: 2px solid rgba(255, 255, 255, 0.5) !important;
+                border-radius: 1.5rem !important;
+                display: flex !important;
+                align-items: center !important;
+                padding-left: 1rem !important;
+                transition: all 0.3s ease !important;
+            }
+            .select2-container--default .select2-selection--single .select2-selection__rendered {
+                color: #1e293b !important;
+                font-weight: 600 !important;
+                font-size: 1.1rem !important;
+            }
+            .select2-container--default .select2-selection--single .select2-selection__arrow {
+                height: 70px !important;
+                right: 1.5rem !important;
+            }
+            .select2-container--open .select2-dropdown {
+                border: none !important;
+                border-radius: 1.5rem !important;
+                box-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.2) !important;
+                overflow: hidden !important;
+                margin-top: 12px !important;
+                background: rgba(255, 255, 255, 0.95) !important;
+                backdrop-filter: blur(20px) !important;
+                animation: select2In 0.3s ease-out forwards;
+            }
+            @keyframes select2In {
+                from { opacity: 0; transform: translateY(-10px); }
+                to { opacity: 1; transform: translateY(0); }
+            }
+            .select2-search--dropdown {
+                padding: 16px !important;
+            }
+            .select2-search--dropdown .select2-search__field {
+                padding: 12px 16px !important;
+                border-radius: 12px !important;
+                border: 1px solid #e2e8f0 !important;
+                font-family: inherit !important;
+                font-size: 0.95rem !important;
+                font-weight: 600 !important;
+                outline: none !important;
+                box-shadow: none !important;
+                transition: all 0.2s ease !important;
+                background: #f8fafc !important;
+                -webkit-appearance: none !important;
+            }
+            .select2-search--dropdown .select2-search__field:focus {
+                border-color: #f59e0b !important;
+                background: #ffffff !important;
+                box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1) !important;
+            }
+            .select2-results__options {
+                padding-bottom: 8px !important;
+            }
+            .select2-results__option {
+                padding: 14px 20px !important;
+                font-size: 0.95rem !important;
+                font-weight: 700 !important;
+                color: #475569 !important;
+                margin: 0 8px !important;
+                border-radius: 10px !important;
+                transition: all 0.15s ease !important;
+            }
+            .select2-container--default .select2-results__option--highlighted[aria-selected] {
+                background-color: #f59e0b !important;
+                color: white !important;
+            }
+            .select2-container--default .select2-results__option[aria-selected=true] {
+                background-color: #fef3c7 !important;
+                color: #92400e !important;
+            }
+            @media (max-width: 768px) {
+                .select2-container--default .select2-selection--single { height: 62px !important; border-radius: 1rem !important; }
+                .select2-container--default .select2-selection--single .select2-selection__rendered { font-size: 1rem !important; }
+                .select2-container--default .select2-selection--single .select2-selection__arrow { height: 62px !important; }
+                .select2-results__option { padding: 12px 16px !important; font-size: 0.9rem !important; }
+            }
+        `;
+        document.head.appendChild(style);
     }
 });

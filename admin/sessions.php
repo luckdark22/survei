@@ -267,7 +267,7 @@ require_once 'includes/header.php';
         transition: all 0.2s;
         width: 100%;
     }
-    .filter-input:focus { border-color: #f59e0b; outline: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1); }
+    .filter-input:focus { border-color: #f59e0b; background: #ffffff; outline: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.1); }
     .btn-filter { 
         height: 44px; 
         padding: 0 24px; 
@@ -391,9 +391,9 @@ require_once 'includes/header.php';
                 <label class="filter-label">Tanggal Akhir</label>
                 <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="filter-input">
             </div>
-            <div class="filter-group" style="flex: 1.5;">
+            <div class="filter-group relative" style="flex: 1.5;">
                 <label class="filter-label">Berdasarkan Event</label>
-                <select name="event_id" class="filter-input" style="width: 100%; height: 44px; border-radius: 12px;">
+                <select name="event_id" onchange="this.form.submit()" class="no-select2 appearance-none filter-input px-4 py-2 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_1rem_center] bg-[length:1.1em_1.1em] pr-10 hover:border-amber-300 transition-all duration-200">
                     <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Seluruh Event'; ?></option>
                     <?php foreach($events_list as $ev): ?>
                         <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>

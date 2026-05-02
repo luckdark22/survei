@@ -71,8 +71,8 @@ $share_link = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] === 'on' ? "https" 
 $editing_id = $_GET['edit'] ?? null;
 $is_adding = isset($_GET['add']);
 
-$type_icons = ['rating'=>'fa-face-smile text-amber-500','text'=>'fa-align-left text-blue-500','number'=>'fa-hashtag text-emerald-500','email'=>'fa-envelope text-violet-500','date'=>'fa-calendar-day text-rose-500','select'=>'fa-list text-cyan-500','checkbox'=>'fa-square-check text-teal-500'];
-$type_labels = ['rating'=>'Emoji Rating','text'=>'Teks / Saran','number'=>'Input Angka','email'=>'Input Email','date'=>'Input Tanggal','select'=>'Pilihan Dropdown','checkbox'=>'Pilihan Banyak'];
+$type_icons = ['rating'=>'fa-face-smile text-amber-500','text'=>'fa-align-left text-blue-500','number'=>'fa-hashtag text-emerald-500','email'=>'fa-envelope text-violet-500','date'=>'fa-calendar-day text-rose-500','select'=>'fa-list text-cyan-500','checkbox'=>'fa-square-check text-teal-500','combobox'=>'fa-magnifying-glass-list text-orange-500'];
+$type_labels = ['rating'=>'Emoji Rating','text'=>'Teks / Saran','number'=>'Input Angka','email'=>'Input Email','date'=>'Input Tanggal','select'=>'Pilihan Dropdown','checkbox'=>'Pilihan Banyak','combobox'=>'Combo Box (Search)'];
 
 $page_title = "Form Builder";
 $page_icon = "fa-wand-magic-sparkles";
@@ -153,7 +153,7 @@ require_once 'includes/header.php';
                         </div>
                     </div>
 
-                    <div class="inline-opts-wrapper" style="<?php echo in_array($q['type'],['select','checkbox'])?'':'display:none;'; ?>">
+                    <div class="inline-opts-wrapper" style="<?php echo in_array($q['type'],['select','checkbox','combobox'])?'':'display:none;'; ?>">
                         <label class="block text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-2">Opsi Pilihan (Pisahkan dengan koma)</label>
                         <textarea name="options" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-600 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 focus:outline-none transition-all h-24 resize-none" placeholder="Opsi 1, Opsi 2, Opsi 3"><?php echo htmlspecialchars($q['options'] ?? ''); ?></textarea>
                     </div>
@@ -351,7 +351,7 @@ require_once 'includes/header.php';
 
     function toggleInlineOpts(sel) {
         const w = sel.closest('form').querySelector('.inline-opts-wrapper');
-        w.style.display = (sel.value === 'select' || sel.value === 'checkbox') ? '' : 'none';
+        w.style.display = (sel.value === 'select' || sel.value === 'checkbox' || sel.value === 'combobox') ? '' : 'none';
     }
 
     function confirmDelete(id, name) {

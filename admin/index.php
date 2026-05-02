@@ -177,10 +177,10 @@ require_once 'includes/header.php';
                 <div class="flex-1 md:flex-none">
                     <input type="date" name="end_date" value="<?php echo htmlspecialchars($end_date); ?>" class="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none">
                 </div>
-                <div class="flex-1 md:flex-none">
-                    <label class="block text-xs font-bold text-slate-500 uppercase mb-1">Filter Event</label>
-                    <select name="event_id" class="w-full md:w-auto px-3 py-2 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white" style="width: 100%; height: 42px; border-radius: 12px;">
-                        <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Semua Event'; ?></option>
+                <div class="flex-1 md:flex-none relative">
+                    <label class="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Filter Berdasarkan Event</label>
+                    <select name="event_id" onchange="this.form.submit()" class="no-select2 appearance-none w-full md:w-72 px-4 py-2.5 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-amber-500 focus:outline-none bg-white text-slate-700 font-bold shadow-sm cursor-pointer bg-[url('data:image/svg+xml;charset=US-ASCII,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2224%22%20height%3D%2224%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%2394a3b8%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpolyline%20points%3D%226%209%2012%2015%2018%209%22%3E%3C%2Fpolyline%3E%3C%2Fsvg%3E')] bg-no-repeat bg-[position:right_1rem_center] bg-[length:1.1em_1.1em] pr-10 hover:border-amber-300 transition-all duration-200">
+                        <option value=""><?php echo isStaff() ? 'Semua Event Saya' : 'Seluruh Event'; ?></option>
                         <?php foreach($events_list as $ev): ?>
                             <option value="<?php echo $ev['id']; ?>" <?php echo $filter_event_id == $ev['id'] ? 'selected' : ''; ?>>
                                 <?php echo htmlspecialchars($ev['name']); ?>

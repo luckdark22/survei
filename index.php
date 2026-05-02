@@ -77,9 +77,25 @@ foreach ($db_questions as $q) {
 }
 
 // Initialize session variables
-if (!isset($_SESSION['current_question_index'])) {
-    $_SESSION['current_question_index'] = 0;
-    $_SESSION['responses'] = [];
+if (!isset($_SESSION['current_question_index']) || isset($_GET['preview'])) {
+    // If it's a preview, we force reset to question 1 so they can test multiple times easily
+    if (isset($_GET['preview'])) {
+        // Only reset if we haven't already started this preview session or if it's a fresh hit
+        // We detect "fresh hit" by checking if we just came from the builder or if we're at the end
+        if (!isset($_SESSION['is_preview_mode']) || isset($_SESSION['is_finished'])) {
+            $_SESSION['current_question_index'] = 0;
+            $_SESSION['responses'] = [];
+            unset($_SESSION['is_finished']);
+            unset($_SESSION['preview_notice']);
+        }
+        $_SESSION['is_preview_mode'] = true;
+    } else {
+        unset($_SESSION['is_preview_mode']);
+        if (!isset($_SESSION['current_question_index'])) {
+            $_SESSION['current_question_index'] = 0;
+            $_SESSION['responses'] = [];
+        }
+    }
 }
 
 // Handle Form Submission
@@ -216,6 +232,10 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
     <link rel="icon" type="image/png" href="assets/img/favicon.png">
     <!-- Tailwind Generated CSS -->
     <link rel="stylesheet" href="assets/css/tailwind.css?v=<?php echo time(); ?>">
+    <!-- jQuery and Select2 -->
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <style>
         @keyframes bounce-x {
 
@@ -603,6 +623,23 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
                                     <?php endforeach; ?>
                                 </select>
                             </div>
+                        <?php elseif ($current_question['type'] === 'combobox'): ?>
+                            <div class="w-full">
+                                <select name="response" 
+                                    class="select2-combobox w-full p-6 md:p-8 rounded-2xl md:rounded-3xl border-2 border-white/50 font-medium text-base md:text-xl text-slate-800 transition-all duration-300 bg-white/40 backdrop-blur-md focus:outline-none focus:bg-white/90 focus:border-amber-400 focus:ring-4 focus:ring-amber-400/20 shadow-sm" 
+                                    onchange="const btn = document.querySelector('.btn-next'); if(btn) { btn.disabled = (this.value === ''); if(!btn.disabled) btn.classList.add('pulse'); else btn.classList.remove('pulse'); }"
+                                    required>
+                                    <option value=""><?php echo $current_question['placeholder'] ?: '-- Cari & Pilih Opsi --'; ?></option>
+                                    <?php 
+                                    $opts = explode(',', $current_question['options'] ?? '');
+                                    foreach($opts as $o): 
+                                        $o = trim($o);
+                                        if($o === '') continue;
+                                    ?>
+                                        <option value="<?php echo htmlspecialchars($o); ?>" <?php echo (isset($_SESSION['responses'][$current_question['id']]) && $_SESSION['responses'][$current_question['id']] == $o) ? 'selected' : ''; ?>><?php echo htmlspecialchars($o); ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
                         <?php elseif ($current_question['type'] === 'checkbox'): ?>
                             <div class="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
                                 <?php 
@@ -709,44 +746,52 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
 
             <div style="display: flex; flex-direction: column; gap: 1.5rem; text-align: left;">
                 <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
-                    <div
-                        style="width: 2.5rem; height: 2.5rem; background: #fffbeb; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #f59e0b; flex-shrink: 0;">
+                    <div style="width: 2.5rem; height: 2.5rem; background: #fff7ed; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #f59e0b; flex-shrink: 0;">
                         <i class="fa-solid fa-face-smile"></i>
                     </div>
                     <div>
-                        <h4
-                            style="font-weight: 700; color: #1e293b; font-size: 1.125rem; margin-bottom: 0.25rem; line-height: 1.2;">
-                            Pilih Emoji</h4>
-                        <p style="color: #64748b; font-size: 0.875rem; margin: 0;">Klik salah satu gambar yang paling
-                            mewakili tingkat kepuasan Anda.</p>
+                        <h4 style="font-weight: 700; color: #1e293b; font-size: 1rem; margin-bottom: 0.25rem; line-height: 1.2;">Pilih Emoji Rating</h4>
+                        <p style="color: #64748b; font-size: 0.8rem; margin: 0;">Klik salah satu gambar yang paling mewakili tingkat kepuasan Anda terhadap layanan kami.</p>
                     </div>
                 </div>
 
                 <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
-                    <div
-                        style="width: 2.5rem; height: 2.5rem; background: #fffbeb; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #f59e0b; flex-shrink: 0;">
+                    <div style="width: 2.5rem; height: 2.5rem; background: #eff6ff; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #3b82f6; flex-shrink: 0;">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-weight: 700; color: #1e293b; font-size: 1rem; margin-bottom: 0.25rem; line-height: 1.2;">Pencarian & Pilihan</h4>
+                        <p style="color: #64748b; font-size: 0.8rem; margin: 0;">Gunakan kotak pencarian untuk menemukan opsi yang sesuai pada pertanyaan daftar pilihan.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
+                    <div style="width: 2.5rem; height: 2.5rem; background: #f0fdf4; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #22c55e; flex-shrink: 0;">
+                        <i class="fa-solid fa-square-check"></i>
+                    </div>
+                    <div>
+                        <h4 style="font-weight: 700; color: #1e293b; font-size: 1rem; margin-bottom: 0.25rem; line-height: 1.2;">Pilihan Banyak</h4>
+                        <p style="color: #64748b; font-size: 0.8rem; margin: 0;">Anda dapat memilih satu atau lebih jawaban yang tersedia sesuai dengan pengalaman Anda.</p>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
+                    <div style="width: 2.5rem; height: 2.5rem; background: #fef2f2; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #ef4444; flex-shrink: 0;">
                         <i class="fa-solid fa-keyboard"></i>
                     </div>
                     <div>
-                        <h4
-                            style="font-weight: 700; color: #1e293b; font-size: 1.125rem; margin-bottom: 0.25rem; line-height: 1.2;">
-                            Berikan Saran</h4>
-                        <p style="color: #64748b; font-size: 0.875rem; margin: 0;">Gunakan keyboard fisik atau virtual
-                            untuk mengetik masukan Anda di halaman terakhir.</p>
+                        <h4 style="font-weight: 700; color: #1e293b; font-size: 1rem; margin-bottom: 0.25rem; line-height: 1.2;">Berikan Masukan</h4>
+                        <p style="color: #64748b; font-size: 0.8rem; margin: 0;">Tuliskan saran atau keluhan Anda secara detail menggunakan keyboard fisik atau virtual.</p>
                     </div>
                 </div>
 
-                <div style="display: flex; gap: 1.25rem; align-items: flex-start;">
-                    <div
-                        style="width: 2.5rem; height: 2.5rem; background: #ecfdf5; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #10b981; flex-shrink: 0;">
-                        <i class="fa-solid fa-paper-plane"></i>
+                <div style="display: flex; gap: 1.25rem; align-items: flex-start; padding-top: 0.75rem; border-top: 1px dashed #e2e8f0;">
+                    <div style="width: 2.5rem; height: 2.5rem; background: #fafafa; border-radius: 0.75rem; display: flex; align-items: center; justify-content: center; color: #94a3b8; flex-shrink: 0;">
+                        <i class="fa-solid fa-user-shield"></i>
                     </div>
                     <div>
-                        <h4
-                            style="font-weight: 700; color: #1e293b; font-size: 1.125rem; margin-bottom: 0.25rem; line-height: 1.2;">
-                            Kirim Survei</h4>
-                        <p style="color: #64748b; font-size: 0.875rem; margin: 0;">Klik tombol "KIRIM SURVEI" untuk
-                            menyimpan jawaban Anda secara permanen.</p>
+                        <h4 style="font-weight: 700; color: #475569; font-size: 0.9rem; margin-bottom: 0.15rem; line-height: 1.2;">Kerahasiaan Terjamin</h4>
+                        <p style="color: #94a3b8; font-size: 0.75rem; margin: 0;">Seluruh jawaban bersifat anonim dan hanya digunakan untuk perbaikan layanan kami.</p>
                     </div>
                 </div>
             </div>
