@@ -214,8 +214,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $current_index = $_SESSION['current_question_index'];
 $is_finished = isset($_SESSION['is_finished']) && $_SESSION['is_finished'];
 $total_questions = count($questions);
-$current_question = $is_finished ? null : $questions[$current_index];
-$progress_percent = (($current_index + 1) / $total_questions) * 100;
+$current_question = ($is_finished || $total_questions === 0) ? null : ($questions[$current_index] ?? null);
+$progress_percent = $total_questions > 0 ? (($current_index + 1) / $total_questions) * 100 : 0;
+
 
 ?>
 <!DOCTYPE html>
@@ -540,10 +541,24 @@ $progress_percent = (($current_index + 1) / $total_questions) * 100;
                         </form>
                     <?php endif; ?>
                 </div>
+            <?php elseif ($total_questions === 0): ?>
+                <!-- Empty Survey Screen -->
+                <div class="bg-transparent text-center max-w-2xl mx-auto py-8">
+                    <div
+                        class="w-20 h-20 md:w-[120px] md:h-[120px] bg-slate-100/50 rounded-full flex items-center justify-center mx-auto mb-8 md:mb-12 text-slate-400 text-4xl md:text-6xl shadow-sm">
+                        <i class="fa-solid fa-folder-open"></i>
+                    </div>
+                    <h1
+                        class="text-3xl md:text-[3.2rem] font-bold text-slate-900 mb-4 md:mb-5 leading-tight tracking-tight">
+                        Belum Ada Pertanyaan</h1>
+                    <p class="text-base md:text-xl text-slate-600 mb-10 md:mb-14 font-medium px-4">
+                        Maaf, saat ini belum ada pertanyaan yang dikonfigurasi untuk survei ini. Silakan hubungi administrator.
+                    </p>
+                </div>
             <?php else: ?>
                 <!-- Survey Component -->
                 <form id="surveyForm" method="POST">
-                    <input type="hidden" name="question_id" value="<?php echo $current_question['id']; ?>">
+                    <input type="hidden" name="question_id" value="<?php echo htmlspecialchars($current_question['id'] ?? ''); ?>">
 
                     <div id="surveyContainer" class="bg-transparent py-4 md:py-8 animate-[fadeInScale_0.6s_ease-out]">
                         <span

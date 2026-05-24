@@ -169,6 +169,7 @@ require_once 'includes/header.php';
                         <thead>
                             <tr class="bg-slate-50 text-slate-500 text-xs uppercase tracking-wider">
                                 <th class="px-4 py-3 font-bold border-b border-slate-200">Nama Event</th>
+                                <th class="px-4 py-3 font-bold border-b border-slate-200">Dibuat Pada</th>
                                 <th class="px-4 py-3 font-bold border-b border-slate-200">Batas Waktu</th>
                                 <th class="px-4 py-3 font-bold border-b border-slate-200 text-center">Status</th>
                                 <th class="px-4 py-3 font-bold border-b border-slate-200 text-right">Aksi</th>
@@ -189,6 +190,10 @@ require_once 'includes/header.php';
                                         <div class="text-[10px] text-slate-400 mt-0.5 truncate max-w-[150px]" title="<?php echo htmlspecialchars($e['description']); ?>">
                                             <?php echo htmlspecialchars($e['description']) ?: 'Tidak ada deskripsi'; ?>
                                         </div>
+                                    </td>
+                                    <td class="px-4 py-4 text-slate-500 text-xs font-medium">
+                                        <?php echo date('d M Y', strtotime($e['created_at'])); ?><br>
+                                        <span class="text-[10px] text-slate-400"><?php echo date('H:i', strtotime($e['created_at'])); ?></span>
                                     </td>
                                     <td class="px-4 py-4 text-slate-600 text-xs">
                                         <?php if($e['expires_at']): ?>

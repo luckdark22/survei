@@ -20,6 +20,10 @@ try {
     $pdo->setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
     // Emulate prepares for performance unless strict typing is forced
     $pdo->setAttribute(PDO::ATTR_EMULATE_PREPARES, false);
+
+    // Set Default Timezone for PHP and MySQL (WIB / Asia/Jakarta)
+    date_default_timezone_set('Asia/Jakarta');
+    $pdo->exec("SET time_zone = '+07:00'");
 } catch(PDOException $e) {
     // If connection fails, halt execution and display a safe error message
     // Note: In production, do not echo the raw error message to the browser

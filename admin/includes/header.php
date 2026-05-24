@@ -321,6 +321,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                     </div>
                 <?php endif; ?>
 
+                <?php if (isAdmin()): ?>
                 <div class="pt-6 pb-2 nav-section">
                     <p class="px-4 text-[9px] font-black text-slate-500 uppercase tracking-[0.2em] mb-4 opacity-50 sidebar-label">Konfigurasi</p>
                     <a href="settings" class="sidebar-link flex items-center gap-3 px-4 py-3 rounded-xl font-bold <?php echo isActive('settings', $current_page); ?>" title="Setelan Sistem">
@@ -328,6 +329,7 @@ $global_instansi_name = $stmt_settings->fetchColumn() ?: 'Direktorat Inovasi & L
                         <span class="sidebar-text">Setelan Sistem</span>
                     </a>
                 </div>
+                <?php endif; ?>
             </nav>
 
             <!-- Bottom Section -->
